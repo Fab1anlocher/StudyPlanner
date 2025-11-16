@@ -357,14 +357,6 @@ streamlit --version
 - Schreibrechte im Verzeichnis vorhanden?
 - Plan-Daten valide? (JSON-Struktur prüfen)
 
----
 
-## Kontakt & Support
-
-- **GitHub**: https://github.com/Fab1anlocher/SmartStudyAssistant
-- **Issues**: https://github.com/Fab1anlocher/SmartStudyAssistant/issues
-- **Email**: (bei Bedarf ergänzen)
-
----
 
 **Viel Erfolg mit dem KI-Lernplaner!** 🎓📚✨

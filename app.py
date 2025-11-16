@@ -18,25 +18,28 @@ import streamlit as st
 from datetime import date, time, datetime, timedelta
 import json
 from openai import OpenAI
-from fpdf import FPDF
-from io import BytesIO
 
 # Import prompt templates
 from prompts import get_system_prompt, build_user_prompt
 
+# Import planning functions
+from planning import calculate_free_slots as calc_free_slots
+
+# Import display functions
+from display_plan import display_plan_views
+
+# Import PDF export
+from pdf_export import create_plan_pdf
+
 
 def calculate_free_slots():
     """
-    Calculate all available free time slots for studying based on:
-    - Semester date range
-    - Recurring busy times
-    - Absence periods
-    - Rest days
-    - Maximum daily study hours
+    Streamlit wrapper for calculate_free_slots from planning module.
+    Extracts parameters from session state and handles UI feedback.
     
     Returns:
-        list: List of dicts with free time slots
-              [{"date": date, "start": "HH:MM", "end": "HH:MM", "hours": float}, ...]
+        list: List of dicts with free time slots in format:
+              [{"date": date, "day": str, "start_time": time, "end_time": time}, ...]
     """
     
     # Extract data from session state
@@ -60,172 +63,131 @@ def calculate_free_slots():
         st.error(f"❌ Ungültiges Enddatum-Format. Bitte gehe zur Einrichtung.")
         return []
     
+    # Prepare parameters for planning module
     busy_times = st.session_state.busy_times
     absences = st.session_state.absences
     rest_days = st.session_state.preferences.get("rest_days", [])
-    max_hours_day = st.session_state.preferences.get("max_hours_day", None)
+    max_hours_day = st.session_state.preferences.get("max_hours_day", 8)
     
-    # Map weekday numbers to names
-    weekday_map = {
-        0: "Monday",
-        1: "Tuesday", 
-        2: "Wednesday",
-        3: "Thursday",
-        4: "Friday",
-        5: "Saturday",
-        6: "Sunday"
+    # Determine smart time windows based on preferred times
+    # This creates reasonable boundaries that prevent ridiculous times like Sunday 06:00
+    preferred_times = st.session_state.preferences.get("preferred_times_of_day", [])
+    
+    if preferred_times:
+        # Use preferred times to set boundaries
+        if "morning" in preferred_times and "afternoon" not in preferred_times and "evening" not in preferred_times:
+            # Only morning: 07:00-12:00
+            earliest_study_time = datetime.strptime("07:00", "%H:%M").time()
+            latest_study_time = datetime.strptime("12:00", "%H:%M").time()
+        elif "afternoon" in preferred_times and "morning" not in preferred_times and "evening" not in preferred_times:
+            # Only afternoon: 12:00-18:00
+            earliest_study_time = datetime.strptime("12:00", "%H:%M").time()
+            latest_study_time = datetime.strptime("18:00", "%H:%M").time()
+        elif "evening" in preferred_times and "morning" not in preferred_times and "afternoon" not in preferred_times:
+            # Only evening: 17:00-22:00
+            earliest_study_time = datetime.strptime("17:00", "%H:%M").time()
+            latest_study_time = datetime.strptime("22:00", "%H:%M").time()
+        elif "morning" in preferred_times and "afternoon" in preferred_times:
+            # Morning + afternoon: 07:00-18:00
+            earliest_study_time = datetime.strptime("07:00", "%H:%M").time()
+            latest_study_time = datetime.strptime("18:00", "%H:%M").time()
+        elif "afternoon" in preferred_times and "evening" in preferred_times:
+            # Afternoon + evening: 12:00-22:00
+            earliest_study_time = datetime.strptime("12:00", "%H:%M").time()
+            latest_study_time = datetime.strptime("22:00", "%H:%M").time()
+        else:
+            # All times or morning+evening: 07:00-22:00 (most flexible but still reasonable)
+            earliest_study_time = datetime.strptime("07:00", "%H:%M").time()
+            latest_study_time = datetime.strptime("22:00", "%H:%M").time()
+    else:
+        # No preference specified: use reasonable student hours
+        # 08:00-20:00 is a sensible default (not too early, not too late)
+        earliest_study_time = datetime.strptime("08:00", "%H:%M").time()
+        latest_study_time = datetime.strptime("20:00", "%H:%M").time()
+    
+    # Convert busy_times format to match planning module expectations
+    # Old format: {"days": [weekdays], "start": "HH:MM", "end": "HH:MM"}
+    # New format: {"day": weekday, "start": time, "end": time}
+    
+    # Mapping German weekday names to English (lowercase)
+    WEEKDAY_DE_TO_EN = {
+        "Montag": "monday",
+        "Dienstag": "tuesday",
+        "Mittwoch": "wednesday",
+        "Donnerstag": "thursday",
+        "Freitag": "friday",
+        "Samstag": "saturday",
+        "Sonntag": "sunday"
     }
     
-    free_slots = []
+    converted_busy_times = []
+    for busy in busy_times:
+        for day in busy["days"]:
+            # Convert German day name to English lowercase
+            english_day = WEEKDAY_DE_TO_EN.get(day, day.lower())
+            converted_busy_times.append({
+                "day": english_day,
+                "start": datetime.strptime(busy["start"], "%H:%M").time(),
+                "end": datetime.strptime(busy["end"], "%H:%M").time()
+            })
     
-    # Iterate through each day in the semester
-    current_date = study_start
-    while current_date <= study_end:
-        # Get weekday name
-        weekday_name = weekday_map[current_date.weekday()]
-        
-        # Check if this is a rest day
-        if weekday_name in rest_days:
-            current_date += timedelta(days=1)
-            continue
-        
-        # Check if this date falls within any absence period
-        is_absent = False
-        for absence in absences:
-            if absence["start_date"] <= current_date <= absence["end_date"]:
-                is_absent = True
-                break
-        
-        if is_absent:
-            current_date += timedelta(days=1)
-            continue
-        
-        # Get user-defined daily study window from preferences
-        earliest_time_str = st.session_state.preferences.get("earliest_study_time", "06:00")
-        latest_time_str = st.session_state.preferences.get("latest_study_time", "22:00")
-        daily_study_start = datetime.strptime(earliest_time_str, "%H:%M").time()
-        daily_study_end = datetime.strptime(latest_time_str, "%H:%M").time()
-        
-        # Create initial free intervals for this day (only within allowed time window)
-        free_intervals = [(daily_study_start, daily_study_end)]
-        
-        # Get all busy times that apply to this weekday
-        applicable_busy_times = [bt for bt in busy_times if weekday_name in bt["days"]]
-        
-        # Subtract each busy time from the free intervals
-        for busy in applicable_busy_times:
-            busy_start = datetime.strptime(busy["start"], "%H:%M").time()
-            busy_end = datetime.strptime(busy["end"], "%H:%M").time()
-            
-            new_free_intervals = []
-            for free_start, free_end in free_intervals:
-                # Subtract busy interval from this free interval
-                result_intervals = subtract_time_interval(free_start, free_end, busy_start, busy_end)
-                new_free_intervals.extend(result_intervals)
-            
-            free_intervals = new_free_intervals
-        
-        # Calculate total free hours for this day
-        total_free_hours = sum([
-            (datetime.combine(date.min, end) - datetime.combine(date.min, start)).total_seconds() / 3600
-            for start, end in free_intervals
-        ])
-        
-        # Apply max_hours_day limit if set
-        if max_hours_day and total_free_hours > max_hours_day:
-            # Truncate intervals to respect max daily hours
-            free_intervals = truncate_intervals_to_max_hours(free_intervals, max_hours_day)
-        
-        # Convert intervals to output format
-        for start_time, end_time in free_intervals:
-            hours = (datetime.combine(date.min, end_time) - datetime.combine(date.min, start_time)).total_seconds() / 3600
-            
-            # Only include intervals with meaningful duration (at least 15 minutes)
-            if hours >= 0.25:
-                free_slots.append({
-                    "date": current_date,
-                    "start": start_time.strftime("%H:%M"),
-                    "end": end_time.strftime("%H:%M"),
-                    "hours": round(hours, 2)
-                })
-        
-        current_date += timedelta(days=1)
+    # Convert absences format
+    # Old format: {"start_date": date, "end_date": date}
+    # New format: {"start": date, "end": date}
+    converted_absences = []
+    for absence in absences:
+        converted_absences.append({
+            "start": absence["start_date"],
+            "end": absence["end_date"]
+        })
     
-    return free_slots
-
-
-def subtract_time_interval(free_start, free_end, busy_start, busy_end):
-    """
-    Subtract a busy time interval from a free time interval.
+    # Convert rest_days from German to English lowercase
+    WEEKDAY_DE_TO_EN_REST = {
+        "Montag": "monday",
+        "Dienstag": "tuesday",
+        "Mittwoch": "wednesday",
+        "Donnerstag": "thursday",
+        "Freitag": "friday",
+        "Samstag": "saturday",
+        "Sonntag": "sunday"
+    }
+    converted_rest_days = [WEEKDAY_DE_TO_EN_REST.get(day, day.lower()) for day in rest_days]
     
-    Args:
-        free_start (time): Start of free interval
-        free_end (time): End of free interval
-        busy_start (time): Start of busy interval
-        busy_end (time): End of busy interval
+    # Call planning module
+    free_slots, error = calc_free_slots(
+        study_start=study_start,
+        study_end=study_end,
+        busy_times=converted_busy_times,
+        absences=converted_absences,
+        rest_days=converted_rest_days,
+        max_hours_day=max_hours_day,
+        earliest_study_time=earliest_study_time,
+        latest_study_time=latest_study_time
+    )
     
-    Returns:
-        list: List of tuples (start, end) representing remaining free intervals
-    """
-    
-    # No overlap - return original interval
-    if busy_end <= free_start or busy_start >= free_end:
-        return [(free_start, free_end)]
-    
-    # Busy interval completely covers free interval - nothing left
-    if busy_start <= free_start and busy_end >= free_end:
+    # Handle errors
+    if error:
+        st.error(f"❌ {error}")
         return []
     
-    # Busy interval is in the middle - split into two intervals
-    if busy_start > free_start and busy_end < free_end:
-        return [(free_start, busy_start), (busy_end, free_end)]
-    
-    # Busy interval overlaps beginning
-    if busy_start <= free_start and busy_end < free_end:
-        return [(busy_end, free_end)]
-    
-    # Busy interval overlaps end
-    if busy_start > free_start and busy_end >= free_end:
-        return [(free_start, busy_start)]
-    
-    # Default: return original (shouldn't reach here)
-    return [(free_start, free_end)]
-
-
-def truncate_intervals_to_max_hours(intervals, max_hours):
-    """
-    Truncate a list of time intervals to not exceed a maximum total duration.
-    
-    Args:
-        intervals (list): List of (start_time, end_time) tuples
-        max_hours (float): Maximum total hours allowed
-    
-    Returns:
-        list: Truncated list of intervals
-    """
-    result = []
-    accumulated_hours = 0.0
-    
-    for start_time, end_time in intervals:
-        interval_hours = (datetime.combine(date.min, end_time) - datetime.combine(date.min, start_time)).total_seconds() / 3600
+    # Convert output format to match expected format in rest of app
+    # planning module returns: {"date": date, "day": str, "start_time": time, "end_time": time}
+    # app expects: {"date": date, "start": "HH:MM", "end": "HH:MM", "hours": float}
+    converted_output = []
+    for slot in free_slots:
+        hours = (datetime.combine(date.min, slot["end_time"]) - 
+                datetime.combine(date.min, slot["start_time"])).total_seconds() / 3600
         
-        if accumulated_hours >= max_hours:
-            break
-        
-        if accumulated_hours + interval_hours <= max_hours:
-            # This interval fits completely
-            result.append((start_time, end_time))
-            accumulated_hours += interval_hours
-        else:
-            # Partial interval - truncate to fit remaining hours
-            remaining_hours = max_hours - accumulated_hours
-            remaining_seconds = int(remaining_hours * 3600)
-            new_end_time = (datetime.combine(date.min, start_time) + timedelta(seconds=remaining_seconds)).time()
-            result.append((start_time, new_end_time))
-            accumulated_hours = max_hours
-            break
+        # Only include intervals with meaningful duration (at least 15 minutes)
+        if hours >= 0.25:
+            converted_output.append({
+                "date": slot["date"],
+                "start": slot["start_time"].strftime("%H:%M"),
+                "end": slot["end_time"].strftime("%H:%M"),
+                "hours": round(hours, 2)
+            })
     
-    return result
+    return converted_output
 
 
 def generate_plan_via_ai():
@@ -384,7 +346,6 @@ def main():
     Willkommen beim **KI-Lernplaner**! Diese Anwendung hilft dir, einen personalisierten, 
     KI-generierten Lernplan basierend auf deinen Prüfungen, Leistungsnachweisen, Verfügbarkeit und Lernpräferenzen zu erstellen.
     
-    Nutze das Navigationsmenü links, um zu beginnen.
     """)
     
     st.markdown("---")
@@ -395,7 +356,7 @@ def main():
     
     page = st.sidebar.radio(
         "Gehe zu:",
-        ["Einrichtung", "Lernplan", "Anpassungen", "Export"],
+        ["Einrichtung", "Lernplan", "Export"],
         label_visibility="collapsed"
     )
     
@@ -407,8 +368,6 @@ def main():
         show_setup_page()
     elif page == "Lernplan":
         show_plan_page()
-    elif page == "Anpassungen":
-        show_adjustments_page()
     elif page == "Export":
         show_export_page()
 
@@ -427,6 +386,7 @@ def show_setup_page():
     study_start = st.date_input(
         "Lernplan-Start",
         value=st.session_state.study_start,
+        format="DD.MM.YYYY",
         help="Ab wann möchtest du aktiv mit dem Lernen beginnen?"
     )
     st.session_state.study_start = study_start
@@ -439,10 +399,8 @@ def show_setup_page():
             st.info(f"ℹ️ Der Lernplan endet automatisch am Tag deines letzten Leistungsnachweises: **{st.session_state.study_end.strftime('%d.%m.%Y')}**")
         else:
             st.session_state.study_end = None
-            st.info("ℹ️ Bitte gib zuerst mindestens einen Leistungsnachweis mit Fälligkeitsdatum ein.")
     else:
         st.session_state.study_end = None
-        st.info("ℹ️ Bitte gib zuerst mindestens einen Leistungsnachweis mit Fälligkeitsdatum ein.")
     
     st.markdown("---")
     
@@ -459,7 +417,7 @@ def show_setup_page():
         with col1:
             ln_title = st.text_input(
                 "Titel des Leistungsnachweises",
-                placeholder="z.B. Klausur Höhere Mathematik, Seminararbeit, Projektpräsentation",
+                placeholder="z.B. Prüfung Data Science, Seminararbeit, Präsentation",
                 help="Der Titel deiner Prüfung, Arbeit oder Präsentation"
             )
         
@@ -476,6 +434,7 @@ def show_setup_page():
             ln_deadline = st.date_input(
                 "Fälligkeitsdatum / Prüfungsdatum",
                 value=None,
+                format="DD.MM.YYYY",
                 help="Wann findet die Prüfung statt oder ist die Abgabe fällig?"
             )
         
@@ -600,7 +559,7 @@ def show_setup_page():
     st.markdown("---")
     
     # ========== SECTION 4: BUSY TIMES (RECURRING WEEKLY SCHEDULE) ==========
-    st.subheader("4️⃣ Wiederkehrende belegte Zeiten")
+    st.subheader("4️⃣ Belgete Zeiten (wöchentliche Verpflichtungen)")
     st.markdown("Definiere deine regelmässigen wöchentlichen Verpflichtungen (Arbeit, Vorlesungen, Sport etc.), damit der Planer weiss, wann du nicht verfügbar bist.")
     
     # Form to add busy interval
@@ -692,6 +651,7 @@ def show_setup_page():
             absence_start = st.date_input(
                 "Startdatum",
                 value=None,
+                format="DD.MM.YYYY",
                 help="Erster Tag deiner Abwesenheit"
             )
         
@@ -699,6 +659,7 @@ def show_setup_page():
             absence_end = st.date_input(
                 "Enddatum",
                 value=None,
+                format="DD.MM.YYYY",
                 help="Letzter Tag deiner Abwesenheit"
             )
         
@@ -791,33 +752,15 @@ def show_setup_page():
             help="Kürzeste akzeptable Lerneinheit-Länge"
         )
     
-    st.markdown("**Erlaubtes Zeitfenster pro Tag:**")
-    st.markdown("Lege fest, wann die KI Lernzeiten einplanen darf (verhindert Lernen in der Nacht).")
-    
-    col3, col4 = st.columns(2)
-    
-    with col3:
-        earliest_study_time = st.time_input(
-            "Früheste Lernzeit",
-            value=datetime.strptime(st.session_state.preferences.get("earliest_study_time", "06:00"), "%H:%M").time(),
-            help="Ab dieser Uhrzeit darf der Planer Lernzeiten einplanen."
-        )
-    
-    with col4:
-        latest_study_time = st.time_input(
-            "Späteste Lernzeit",
-            value=datetime.strptime(st.session_state.preferences.get("latest_study_time", "22:00"), "%H:%M").time(),
-            help="Bis zu dieser Uhrzeit darf der Planer Lernzeiten einplanen (kein Lernen in der Nacht)."
-        )
+    st.markdown("**ℹ️ Hinweis zu Lernzeiten:**")
+    st.info("Die KI plant Lernzeiten intelligent basierend auf deinen bevorzugten Tageszeiten (siehe unten). Es werden keine unmöglichen Zeiten gewählt (z.B. nachts oder sehr früh morgens).")
     
     # Update preferences in session state
     st.session_state.preferences.update({
         "rest_days": rest_days,
         "max_hours_day": max_hours_day,
         "max_hours_week": max_hours_week if max_hours_week > 0 else None,
-        "min_session_duration": min_session_duration,
-        "earliest_study_time": earliest_study_time.strftime("%H:%M"),
-        "latest_study_time": latest_study_time.strftime("%H:%M")
+        "min_session_duration": min_session_duration
     })
     
     st.success("✅ Einstellungen automatisch gespeichert")
@@ -976,7 +919,7 @@ def show_setup_page():
         - Verhindert mentale Erschöpfung bei trockener Theorie
         """)
         
-        st.info("💡 **Empfehlung für den Start:** Wenn du unsicher bist, aktiviere **Wiederholen mit Abständen** + **Längere Fokus-Blöcke für schwierige Themen**. Du kannst die Einstellungen später jederzeit auf der Anpassungen-Seite ändern.")
+        st.info("💡 **Empfehlung für den Start:** Wenn du unsicher bist, aktiviere **Wiederholen mit Abständen** + **Längere Fokus-Blöcke für schwierige Themen**. Du kannst die Einstellungen später jederzeit auf der Lernplan-Seite ändern.")
     
     st.markdown("---")
     
@@ -1022,7 +965,7 @@ def show_setup_page():
     if num_leistungsnachweise > 0:
         with st.expander("📚 Details zu deinen Leistungsnachweisen"):
             for ln in st.session_state.leistungsnachweise:
-                deadline_str = f" - Fällig: {ln['deadline'].strftime('%d %b %Y')}" if ln.get('deadline') else ""
+                deadline_str = f" - Fällig: {ln['deadline'].strftime('%d.%m.%Y')}" if ln.get('deadline') else ""
                 module_str = f" [{ln['module']}]" if ln.get('module') else ""
                 topics_count = len(ln['topics']) if ln['topics'] else 0
                 st.write(f"• **{ln['title']}** ({ln['type']}){module_str} (Priorität {ln['priority']}/5, Aufwand {ln['effort']}/5{deadline_str}) - {topics_count} Themen")
@@ -1097,10 +1040,11 @@ def show_setup_page():
 
 def show_plan_page():
     """
-    Plan page - Display and generate the AI-powered study plan.
+    Integrated plan page - Generate, view, and adjust the AI-powered study plan.
+    Single page with conditional flow based on plan existence.
     """
     st.header("📅 Lernplan")
-    st.markdown("Generiere deinen personalisierten KI-gestützten Lernplan basierend auf deiner Einrichtung.")
+    st.markdown("Hier kannst du deinen KI-gestützten Lernplan generieren, anzeigen und bei Bedarf feinjustieren.")
     
     # Check if setup is complete
     setup_complete = (
@@ -1122,763 +1066,304 @@ def show_plan_page():
     
     st.markdown("---")
     
-    # ========== STEP 1: CALCULATE FREE TIME SLOTS ==========
-    st.subheader("Schritt 1: Verfügbare Lernzeit berechnen")
-    st.markdown("Zuerst identifizieren wir alle deine verfügbaren freien Zeitfenster basierend auf deinen Einschränkungen.")
+    # Check if plan already exists
+    plan_exists = "plan" in st.session_state and st.session_state.plan and len(st.session_state.plan) > 0
     
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        if st.button("🔍 Freie Zeitfenster berechnen", type="primary", use_container_width=True):
-            with st.spinner("Berechne freie Zeitfenster..."):
-                free_slots = calculate_free_slots()
-                st.session_state.free_slots = free_slots
-                st.success(f"✅ {len(free_slots)} freie Zeitfenster gefunden!")
-    
-    with col2:
-        if "free_slots" in st.session_state and st.session_state.free_slots:
-            total_hours = sum([slot["hours"] for slot in st.session_state.free_slots])
-            st.metric("Gesamte freie Stunden", f"{total_hours:.1f}h")
-    
-    # Display free slots if calculated
-    if "free_slots" in st.session_state and st.session_state.free_slots:
-        free_slots = st.session_state.free_slots
-        
-        st.markdown("---")
-        st.markdown("**📊 Zusammenfassung freie Zeitfenster:**")
-        
-        # Summary statistics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Zeitfenster gesamt", len(free_slots))
-        with col2:
-            total_hours = sum([slot["hours"] for slot in free_slots])
-            st.metric("Stunden gesamt", f"{total_hours:.1f}h")
-        with col3:
-            avg_hours = total_hours / len(free_slots) if free_slots else 0
-            st.metric("Ø Stunden/Fenster", f"{avg_hours:.1f}h")
-        with col4:
-            unique_days = len(set([slot["date"] for slot in free_slots]))
-            st.metric("Lerntage", unique_days)
-        
-        # Preview first 10 slots
-        st.markdown("**📋 Vorschau (Erste 10 Zeitfenster):**")
-        
-        preview_data = []
-        for slot in free_slots[:10]:
-            preview_data.append({
-                "Datum": slot["date"].strftime("%a, %d %b %Y"),
-                "Start": slot["start"],
-                "Ende": slot["end"],
-                "Dauer (Stunden)": slot["hours"]
-            })
-        
-        st.dataframe(preview_data, use_container_width=True)
-        
-        if len(free_slots) > 10:
-            with st.expander(f"📄 Alle {len(free_slots)} Zeitfenster anzeigen"):
-                all_slots_data = []
-                for slot in free_slots:
-                    all_slots_data.append({
-                        "Datum": slot["date"].strftime("%a, %d %b %Y"),
-                        "Start": slot["start"],
-                        "Ende": slot["end"],
-                        "Dauer (Stunden)": slot["hours"]
-                    })
-                st.dataframe(all_slots_data, use_container_width=True)
-        
-        st.markdown("---")
-        
-        # Next step hint
-        st.info("""
-        **💡 Nächster Schritt:**
-        
-        Wenn du mit den freien Zeitfenstern zufrieden bist, klicke unten, um deinen KI-generierten Lernplan zu erstellen!
+    # ========== ZUSTAND 1: NOCH KEIN PLAN ==========
+    if not plan_exists:
+        st.subheader("Schritt 1: Lernplan generieren")
+        st.markdown("""
+        Basierend auf deinen Prüfungen, Leistungsnachweisen, belegten Zeiten und Lernpräferenzen 
+        erstellt die KI einen ersten Vorschlag für deinen Lernplan.
         """)
-    
-    st.markdown("---")
-    
-    # ========== STEP 2: GENERATE AI STUDY PLAN ==========
-    st.subheader("Schritt 2: KI-Lernplan generieren")
-    st.markdown("Nutze KI, um einen optimierten Lernplan zu erstellen, der zu deinen freien Zeitfenstern und Lernpräferenzen passt.")
-    
-    # Check if free slots exist
-    if not st.session_state.get("free_slots"):
-        st.warning("⚠️ Bitte berechne zuerst die freien Zeitfenster (Schritt 1), bevor du den KI-Plan generierst.")
-    else:
-        col1, col2 = st.columns([2, 1])
         
-        with col1:
-            plan_exists = "plan" in st.session_state and st.session_state.plan
-            button_label = "🔄 KI-Plan neu generieren" if plan_exists else "🤖 KI-Plan generieren"
-            
-            if st.button(button_label, type="primary", use_container_width=True):
-                with st.spinner("🧠 KI erstellt deinen personalisierten Lernplan... Dies kann 30-60 Sekunden dauern."):
-                    success = generate_plan_via_ai()
-                    
-                    if success:
-                        st.success(f"✅ Lernplan erfolgreich generiert! {len(st.session_state.plan)} Lerneinheiten gefunden.")
-                        st.balloons()
-                    else:
-                        st.error("Plan-Generierung fehlgeschlagen. Prüfe die Fehlermeldung oben.")
+        st.info("""
+        **ℹ️ Was passiert bei der Generierung?**
+        
+        Die KI wird:
+        - Deine verfügbaren freien Zeitfenster berechnen
+        - Alle Leistungsnachweise und deren Deadlines berücksichtigen
+        - Einen optimalen Lernplan erstellen, der zu deinen Präferenzen passt
+        
+        Dies kann 30-60 Sekunden dauern.
+        """)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
         
         with col2:
-            if "plan" in st.session_state and st.session_state.plan:
-                st.metric("Lerneinheiten", len(st.session_state.plan))
-        
-        # Display generated plan
-        if "plan" in st.session_state and st.session_state.plan:
-            plan = st.session_state.plan
-            
-            st.markdown("---")
-            st.markdown("**📅 Dein KI-generierter Lernplan:**")
-            
-            # Summary statistics
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Einheiten gesamt", len(plan))
-            
-            with col2:
-                unique_assessments = len(set([session.get("module", "Unknown") for session in plan]))
-                st.metric("Leistungsnachweise abgedeckt", unique_assessments)
-            
-            with col3:
-                # Calculate total study hours
-                total_study_hours = 0
-                for session in plan:
-                    try:
-                        start = datetime.strptime(session.get("start", "00:00"), "%H:%M")
-                        end = datetime.strptime(session.get("end", "00:00"), "%H:%M")
-                        hours = (end - start).total_seconds() / 3600
-                        total_study_hours += hours
-                    except:
-                        pass
-                st.metric("Lernstunden gesamt", f"{total_study_hours:.1f}h")
-            
-            with col4:
-                unique_dates = len(set([session.get("date", "") for session in plan]))
-                st.metric("Lerntage", unique_dates)
-            
-            st.markdown("---")
-            
-            # Display plan with different views
-            display_plan_views(plan)
-            
-            st.markdown("---")
-            st.success("""
-            **✅ Plan generiert!**
-            
-            Dein KI-generierter Lernplan ist bereit! Du kannst jetzt:
-            - Den Zeitplan oben überprüfen
-            - Zur **Anpassungen**-Seite gehen, um einzelne Einheiten anzupassen
-            - Zur **Export**-Seite gehen, um deinen Plan als PDF oder Kalender-Format herunterzuladen
-            """)
-
-
-def display_sessions_table(sessions):
-    """
-    Display a list of study sessions as a formatted table.
-    
-    Args:
-        sessions (list): List of session dicts
-    """
-    table_data = []
-    for session in sessions:
-        # Parse date
-        try:
-            session_date = datetime.fromisoformat(session.get("date", "")).date()
-            date_str = session_date.strftime("%a, %d %b %Y")
-        except:
-            date_str = session.get("date", "Unknown")
-        
-        table_data.append({
-            "Datum": date_str,
-            "Zeit": f"{session.get('start', 'N/A')} - {session.get('end', 'N/A')}",
-            "Thema": session.get("topic", "N/A"),
-            "Beschreibung": session.get("description", "N/A")
-        })
-    
-    st.dataframe(table_data, use_container_width=True, hide_index=True)
-
-
-def display_plan_views(plan):
-    """
-    Display the study plan in multiple view formats.
-    
-    Args:
-        plan (list): List of study session dicts
-    """
-    
-    if not plan:
-        st.info("📭 Noch kein Lernplan vorhanden. Generiere einen Plan mit dem Button oben.")
-        return
-    
-    # Sort plan chronologically
-    sorted_plan = sorted(plan, key=lambda x: (x.get("date", ""), x.get("start", "")))
-    
-    # Create tabs for different views
-    tab1, tab2 = st.tabs(["📅 Wochenansicht", "📋 Listenansicht"])
-    
-    # ========== WEEKLY VIEW ==========
-    with tab1:
-        st.markdown("**Wochen-Kalenderansicht deines Lernplans**")
-        st.caption("Lerneinheiten organisiert nach Woche und Tag")
-        
-        display_weekly_view(sorted_plan)
-    
-    # ========== LIST VIEW ==========
-    with tab2:
-        st.markdown("**Chronologische Liste aller Lerneinheiten**")
-        st.caption("Vollständiger Zeitplan sortiert nach Datum und Zeit")
-        
-        display_list_view(sorted_plan)
-
-
-def display_weekly_view(sorted_plan):
-    """
-    Display study plan grouped by weeks with daily columns.
-    
-    Args:
-        sorted_plan (list): Sorted list of study session dicts
-    """
-    
-    # Group sessions by ISO week
-    weeks = {}
-    for session in sorted_plan:
-        try:
-            session_date = datetime.fromisoformat(session.get("date", "")).date()
-            # Get ISO week (year, week_number)
-            iso_year, iso_week, _ = session_date.isocalendar()
-            week_key = f"{iso_year}-W{iso_week:02d}"
-            
-            if week_key not in weeks:
-                # Calculate week start (Monday) and end (Sunday)
-                week_start = session_date - timedelta(days=session_date.weekday())
-                week_end = week_start + timedelta(days=6)
-                weeks[week_key] = {
-                    "start": week_start,
-                    "end": week_end,
-                    "week_number": iso_week,
-                    "sessions": []
-                }
-            
-            weeks[week_key]["sessions"].append(session)
-        except:
-            continue
-    
-    if not weeks:
-        st.info("Keine gültigen Einheiten zum Anzeigen.")
-        return
-    
-    # Sort weeks chronologically
-    sorted_weeks = sorted(weeks.items(), key=lambda x: x[1]["start"])
-    
-    # German weekday names
-    day_names_full = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-    day_names_short = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    
-    # Display each week
-    for week_key, week_data in sorted_weeks:
-        week_start = week_data["start"]
-        week_end = week_data["end"]
-        week_num = week_data["week_number"]
-        
-        st.markdown(f"### Woche {week_num} ({week_start.strftime('%d.%m.')} – {week_end.strftime('%d.%m.%Y')})")
-        
-        # Group sessions by weekday
-        days_sessions = {i: [] for i in range(7)}  # 0=Monday, 6=Sunday
-        
-        for session in week_data["sessions"]:
-            try:
-                session_date = datetime.fromisoformat(session.get("date", "")).date()
-                weekday = session_date.weekday()
-                days_sessions[weekday].append(session)
-            except:
-                continue
-        
-        # Sort sessions within each day by start time
-        for day_idx in range(7):
-            days_sessions[day_idx] = sorted(days_sessions[day_idx], key=lambda x: x.get("start", ""))
-        
-        # Create 7 columns for days of the week
-        cols = st.columns(7)
-        
-        for day_idx, col in enumerate(cols):
-            with col:
-                # Calculate the actual date for this day
-                day_date = week_start + timedelta(days=day_idx)
-                st.markdown(f"**{day_names_short[day_idx]}**")
-                st.caption(day_date.strftime("%d.%m."))
-                
-                sessions_today = days_sessions[day_idx]
-                
-                if sessions_today:
-                    for session in sessions_today:
-                        # Create a compact card for each session
-                        start = session.get("start", "N/A")
-                        end = session.get("end", "N/A")
-                        module = session.get("module", "Unknown")
-                        topic = session.get("topic", "N/A")
-                        
-                        # Truncate long titles for display
-                        module_display = module[:20] + "..." if len(module) > 20 else module
-                        topic_display = topic[:25] + "..." if len(topic) > 25 else topic
-                        
-                        # Use a container with custom styling
-                        st.markdown(f"""
-                        <div style="background-color: #f0f2f6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #0066cc;">
-                            <div style="font-size: 0.75em; font-weight: bold; color: #0066cc;">{start}–{end}</div>
-                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600;">{module_display}</div>
-                            <div style="font-size: 0.7em; color: #666; margin-top: 2px;">{topic_display}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.markdown("<div style='color: #999; font-size: 0.8em; font-style: italic;'>Kein Lernen</div>", unsafe_allow_html=True)
-        
-        st.markdown("---")
-
-
-def display_list_view(sorted_plan):
-    """
-    Display study plan as a chronological list grouped by date.
-    
-    Args:
-        sorted_plan (list): Sorted list of study session dicts
-    """
-    
-    # German weekday names
-    german_weekdays = {
-        "Monday": "Montag",
-        "Tuesday": "Dienstag",
-        "Wednesday": "Mittwoch",
-        "Thursday": "Donnerstag",
-        "Friday": "Freitag",
-        "Saturday": "Samstag",
-        "Sunday": "Sonntag"
-    }
-    
-    # Group sessions by date
-    sessions_by_date = {}
-    for session in sorted_plan:
-        date_key = session.get("date", "Unknown")
-        if date_key not in sessions_by_date:
-            sessions_by_date[date_key] = []
-        sessions_by_date[date_key].append(session)
-    
-    # Display each date group
-    for date_str in sorted(sessions_by_date.keys()):
-        try:
-            session_date = datetime.fromisoformat(date_str).date()
-            # Get English weekday name and translate to German
-            weekday_en = session_date.strftime("%A")
-            weekday_de = german_weekdays.get(weekday_en, weekday_en)
-            date_display = f"{weekday_de}, {session_date.strftime('%d. %B %Y')}"
-        except:
-            date_display = date_str
-        
-        st.markdown(f"### 📅 {date_display}")
-        
-        sessions = sessions_by_date[date_str]
-        
-        # Sort sessions by start time
-        sessions = sorted(sessions, key=lambda x: x.get("start", ""))
-        
-        for session in sessions:
-            start = session.get("start", "N/A")
-            end = session.get("end", "N/A")
-            module = session.get("module", "Unknown")
-            topic = session.get("topic", "N/A")
-            description = session.get("description", "")
-            
-            # Create formatted session entry
-            col1, col2 = st.columns([1, 4])
-            
-            with col1:
-                st.markdown(f"**{start} – {end}**")
-            
-            with col2:
-                st.markdown(f"**{module}**")
-                st.markdown(f"📖 {topic}")
-                if description:
-                    st.caption(f"📝 {description}")
-        
-        st.markdown("---")
-
-
-def show_adjustments_page():
-    """
-    Adjustments page - Modify settings and regenerate the study plan.
-    """
-    st.header("🔧 Anpassungen")
-    st.markdown("Verfeinere deine Einstellungen und generiere deinen Lernplan mit aktualisierten Präferenzen neu.")
-    
-    # Check if critical data exists
-    has_leistungsnachweise = len(st.session_state.leistungsnachweise) > 0
-    has_api_key = bool(st.session_state.openai_key)
-    has_valid_dates = st.session_state.study_end is not None
-    
-    if not (has_leistungsnachweise and has_api_key and has_valid_dates):
-        st.warning("""
-        ⚠️ **Einrichtung unvollständig**
-        
-        Bitte schliesse zuerst die Einrichtung ab:
-        - Füge mindestens einen Leistungsnachweis hinzu
-        - Gib deinen OpenAI API-Schlüssel ein
-        - Setze gültige Semesterdaten
-        """)
-        return
-    
-    st.markdown("---")
-    
-    # ========== SECTION 1: LEISTUNGSNACHWEISE PRIORITIES ==========
-    st.subheader("1️⃣ Prioritäten & Lernaufwand")
-    st.markdown("Passe Prioritätslevel und Lernaufwand für jeden Leistungsnachweis an. Höhere Werte = mehr Lernzeit zugeteilt.")
-    
-    if st.session_state.leistungsnachweise:
-        # Display leistungsnachweise with priority sliders
-        for idx, ln in enumerate(st.session_state.leistungsnachweise):
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-            
-            with col1:
-                st.markdown(f"**{ln['title']}** ({ln['type']})")
-                if ln.get('deadline'):
-                    st.caption(f"Fällig: {ln['deadline'].strftime('%d %b %Y')}")
-                if ln.get('module'):
-                    st.caption(f"Modul: {ln['module']}")
-            
-            with col2:
-                new_priority = st.slider(
-                    "Priorität",
-                    min_value=1,
-                    max_value=5,
-                    value=ln.get('priority', 3),
-                    key=f"priority_adjust_{idx}",
-                    label_visibility="collapsed",
-                    help="1 = niedrige Priorität, 5 = hohe Priorität"
-                )
-                # Update priority in session state
-                st.session_state.leistungsnachweise[idx]['priority'] = new_priority
-            
-            with col3:
-                new_effort = st.slider(
-                    "Lernaufwand",
-                    min_value=1,
-                    max_value=5,
-                    value=ln.get('effort', 3),
-                    key=f"effort_adjust_{idx}",
-                    label_visibility="collapsed",
-                    help="1 = wenig Aufwand, 5 = sehr viel Aufwand"
-                )
-                # Update effort in session state
-                st.session_state.leistungsnachweise[idx]['effort'] = new_effort
-            
-            with col4:
-                st.metric("", f"P:{new_priority} A:{new_effort}")
-        
-        st.success("✅ Prioritätsänderungen automatisch gespeichert")
-    else:
-        st.info("Keine Leistungsnachweise zum Anpassen verfügbar.")
-    
-    st.markdown("---")
-    
-    # ========== SECTION 2: BUSY TIMES QUICK EDIT ==========
-    st.subheader("2️⃣ Wann hast du schon etwas vor?")
-    st.markdown("Verwalte deine wiederkehrenden wöchentlichen Verpflichtungen.")
-    
-    # Display existing busy times
-    if st.session_state.busy_times:
-        st.markdown("**Deine aktuellen belegten Zeiten:**")
-        
-        for idx, busy in enumerate(st.session_state.busy_times):
-            col1, col2 = st.columns([4, 1])
-            
-            with col1:
-                days_str = ", ".join(busy['days'])
-                st.write(f"• **{busy['label']}**: {days_str} von {busy['start']} bis {busy['end']}")
-            
-            with col2:
-                if st.button("🗑️ Entfernen", key=f"remove_busy_adjust_{idx}", use_container_width=True):
-                    st.session_state.busy_times.pop(idx)
-                    st.success("Belegte Zeit entfernt!")
-                    st.rerun()
-    else:
-        st.info("Keine belegten Zeiten konfiguriert.")
-    
-    # Add new busy time (simplified)
-    with st.expander("➕ Neue belegte Zeit hinzufügen"):
-        with st.form("add_busy_time_adjust", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                new_busy_label = st.text_input("Bezeichnung", placeholder="z.B. Meeting, Vorlesung")
-                new_busy_days = st.multiselect(
-                    "Tage",
-                    ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-                )
-            
-            with col2:
-                new_busy_start = st.time_input("Startzeit", value=None)
-                new_busy_end = st.time_input("Endzeit", value=None)
-            
-            if st.form_submit_button("Hinzufügen", use_container_width=True):
-                if new_busy_label and new_busy_days and new_busy_start and new_busy_end:
-                    st.session_state.busy_times.append({
-                        "label": new_busy_label,
-                        "days": new_busy_days,
-                        "start": new_busy_start.strftime("%H:%M"),
-                        "end": new_busy_end.strftime("%H:%M")
-                    })
-                    st.success("Belegte Zeit hinzugefügt!")
-                    st.rerun()
-                else:
-                    st.error("Bitte fülle alle Felder aus.")
-    
-    st.markdown("---")
-    
-    # ========== SECTION 3: LEARNING PREFERENCES QUICK EDIT ==========
-    st.subheader("3️⃣ Lernpräferenzen")
-    st.markdown("Passe deine Lernstrategien und Lern-Limits an.")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Lernstrategien:**")
-        
-        spacing = st.checkbox(
-            "Spaced Repetition",
-            value=st.session_state.preferences.get("spacing", True),
-            key="adjust_spacing"
-        )
-        
-        interleaving = st.checkbox(
-            "Interleaving von Fächern",
-            value=st.session_state.preferences.get("interleaving", False),
-            key="adjust_interleaving"
-        )
-        
-        deep_work = st.checkbox(
-            "Deep-Work-Einheiten für komplexe Themen",
-            value=st.session_state.preferences.get("deep_work", True),
-            key="adjust_deep_work"
-        )
-        
-        short_sessions = st.checkbox(
-            "Kurze Einheiten für theorielastige Fächer",
-            value=st.session_state.preferences.get("short_sessions", False),
-            key="adjust_short_sessions"
-        )
-    
-    with col2:
-        st.markdown("**Lern-Limits:**")
-        
-        max_hours_day = st.number_input(
-            "Max. Stunden pro Tag",
-            min_value=1,
-            max_value=24,
-            value=st.session_state.preferences.get("max_hours_day", 8),
-            key="adjust_max_hours_day"
-        )
-        
-        max_hours_week = st.number_input(
-            "Max. Stunden pro Woche",
-            min_value=0,
-            max_value=168,
-            value=st.session_state.preferences.get("max_hours_week", 40),
-            key="adjust_max_hours_week"
-        )
-        
-        min_session_duration = st.number_input(
-            "Min. Einheiten-Dauer (Minuten)",
-            min_value=15,
-            max_value=240,
-            value=st.session_state.preferences.get("min_session_duration", 60),
-            step=15,
-            key="adjust_min_session"
-        )
-    
-    # Update preferences
-    st.session_state.preferences.update({
-        "spacing": spacing,
-        "interleaving": interleaving,
-        "deep_work": deep_work,
-        "short_sessions": short_sessions,
-        "max_hours_day": max_hours_day,
-        "max_hours_week": max_hours_week if max_hours_week > 0 else None,
-        "min_session_duration": min_session_duration
-    })
-    
-    st.success("✅ Präferenzen aktualisiert")
-    
-    st.markdown("---")
-    
-    # ========== SECTION 4: RE-PLANNING ==========
-    st.subheader("4️⃣ Lernplan neu generieren")
-    st.markdown("Wende deine Änderungen an und erstelle einen neuen Lernplan basierend auf den aktualisierten Einstellungen.")
-    
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.info("""
-        **Was passiert bei der Neu-Generierung:**
-        1. Freie Zeitfenster werden basierend auf aktuellen belegten Zeiten und Abwesenheiten neu berechnet
-        2. KI erstellt einen neuen Lernplan mit aktualisierten Modul-Prioritäten und Präferenzen
-        3. Dein vorheriger Plan wird durch den neuen ersetzt
-        """)
-    
-    with col2:
-        if st.button("🔄 Aktualisieren & Neu generieren", type="primary", use_container_width=True):
-            with st.spinner("Neu berechnen und generieren..."):
-                # Step 1: Recalculate free slots
-                try:
+            if st.button("🤖 Lernplan jetzt generieren", type="primary", use_container_width=True, key="generate_initial_plan"):
+                with st.spinner("🧠 KI erstellt deinen personalisierten Lernplan..."):
+                    # Calculate free slots first
                     free_slots = calculate_free_slots()
                     st.session_state.free_slots = free_slots
                     
-                    # Step 2: Generate new AI plan
-                    success = generate_plan_via_ai()
-                    
-                    if success:
-                        st.success(f"""
-                        ✅ **Plan erfolgreich neu generiert!**
-                        
-                        - Freie Zeitfenster neu berechnet: {len(free_slots)} Fenster
-                        - Neuer Lernplan erstellt: {len(st.session_state.plan)} Einheiten
-                        
-                        👉 Gehe zur **Lernplan**-Seite, um deinen aktualisierten Zeitplan zu sehen!
-                        """)
-                        st.balloons()
+                    if not free_slots:
+                        st.error("❌ Keine freien Zeitfenster gefunden. Bitte überprüfe deine Einstellungen.")
                     else:
-                        st.error("Neue Plan-Generierung fehlgeschlagen. Prüfe Fehlermeldungen oben.")
-                
-                except Exception as e:
-                    st.error(f"Fehler bei der Neu-Generierung: {str(e)}")
+                        # Generate plan via AI
+                        success = generate_plan_via_ai()
+                        
+                        if success:
+                            st.success(f"✅ Lernplan erfolgreich generiert! {len(st.session_state.plan)} Lerneinheiten gefunden.")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error("❌ Plan-Generierung fehlgeschlagen. Bitte versuche es erneut.")
     
-    st.markdown("---")
-    
-    # Quick stats
-    with st.expander("📊 Aktuelle Konfigurations-Übersicht"):
-        col1, col2, col3 = st.columns(3)
+    # ========== ZUSTAND 2: PLAN VORHANDEN ==========
+    else:
+        plan = st.session_state.plan
+        
+        # ========== PLAN ANZEIGEN ==========
+        st.subheader("Dein aktueller Lernplan")
+        
+        # Summary statistics
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Leistungsnachweise", len(st.session_state.leistungsnachweise))
-            avg_priority = sum([ln.get('priority', 1) for ln in st.session_state.leistungsnachweise]) / len(st.session_state.leistungsnachweise) if st.session_state.leistungsnachweise else 0
-            st.metric("Ø Priorität", f"{avg_priority:.1f}/5")
+            st.metric("Lerneinheiten", len(plan))
         
         with col2:
-            st.metric("Belegte Zeiten", len(st.session_state.busy_times))
-            st.metric("Abwesenheiten", len(st.session_state.absences))
+            unique_assessments = len(set([session.get("module", "Unknown") for session in plan]))
+            st.metric("Leistungsnachweise", unique_assessments)
         
         with col3:
-            st.metric("Max. Stunden/Tag", st.session_state.preferences.get("max_hours_day", 0))
-            rest_days = len(st.session_state.preferences.get("rest_days", []))
-            st.metric("Ruhetage/Woche", rest_days)
-
-
-def create_plan_pdf(plan):
-    """
-    Create a PDF document from the study plan.
-    
-    Args:
-        plan (list): List of study session dicts, sorted chronologically
-    
-    Returns:
-        bytes: PDF file as bytes
-    """
-    
-    # German weekday names
-    german_weekdays = {
-        "Monday": "Montag",
-        "Tuesday": "Dienstag",
-        "Wednesday": "Mittwoch",
-        "Thursday": "Donnerstag",
-        "Friday": "Freitag",
-        "Saturday": "Samstag",
-        "Sunday": "Sonntag"
-    }
-    
-    # Create PDF object
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    
-    # Title
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.cell(0, 10, "Personalisierter Lernplan", ln=True, align="C")
-    pdf.ln(5)
-    
-    # Study plan dates
-    pdf.set_font("Helvetica", "", 12)
-    study_start = st.session_state.study_start.strftime("%d. %B %Y")
-    study_end = st.session_state.study_end.strftime("%d. %B %Y") if st.session_state.study_end else "N/A"
-    pdf.cell(0, 8, f"Lernplan: {study_start} - {study_end}", ln=True, align="C")
-    pdf.ln(10)
-    
-    # Group sessions by date
-    sessions_by_date = {}
-    for session in plan:
-        date_key = session.get("date", "Unknown")
-        if date_key not in sessions_by_date:
-            sessions_by_date[date_key] = []
-        sessions_by_date[date_key].append(session)
-    
-    # Iterate through each date
-    for date_str in sorted(sessions_by_date.keys()):
-        # Parse and format date with German weekday
-        try:
-            session_date = datetime.fromisoformat(date_str).date()
-            weekday_en = session_date.strftime("%A")
-            weekday_de = german_weekdays.get(weekday_en, weekday_en)
-            date_display = f"{weekday_de}, {session_date.strftime('%d. %B %Y')}"
-        except:
-            date_display = date_str
+            # Calculate total study hours
+            total_study_hours = 0
+            for session in plan:
+                try:
+                    start = datetime.strptime(session.get("start", "00:00"), "%H:%M")
+                    end = datetime.strptime(session.get("end", "00:00"), "%H:%M")
+                    hours = (end - start).total_seconds() / 3600
+                    total_study_hours += hours
+                except:
+                    pass
+            st.metric("Lernstunden gesamt", f"{total_study_hours:.1f}h")
         
-        # Date header (bold)
-        pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 8, date_display, ln=True)
-        pdf.ln(2)
+        with col4:
+            unique_dates = len(set([session.get("date", "") for session in plan]))
+            st.metric("Lerntage", unique_dates)
         
-        # Sessions for this date
-        sessions = sessions_by_date[date_str]
+        st.markdown("---")
         
-        for session in sessions:
-            start = session.get("start", "N/A")
-            end = session.get("end", "N/A")
-            module = session.get("module", "Unknown")
-            topic = session.get("topic", "N/A")
-            description = session.get("description", "")
-            
-            # Time (bold)
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(35, 6, f"{start} - {end}", ln=False)
-            
-            # Module
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 6, module, ln=True)
-            
-            # Topic (indented)
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_x(45)
-            pdf.cell(0, 5, f"Thema: {topic}", ln=True)
-            
-            # Description (indented, smaller font)
-            if description:
-                pdf.set_font("Helvetica", "", 9)
-                pdf.set_x(45)
-                pdf.multi_cell(0, 5, description)
-            
-            pdf.ln(2)
+        # Display plan with different views
+        display_plan_views(plan)
         
-        pdf.ln(5)
-    
-    # Footer with generation info
-    pdf.set_y(-30)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(0, 5, f"Generated on {datetime.now().strftime('%d %B %Y at %H:%M')}", ln=True, align="C")
-    pdf.cell(0, 5, "Created with AI Study Planner", ln=True, align="C")
-    
-    # Return PDF as bytes
-    pdf_bytes = pdf.output(dest="S").encode("latin-1")
-    return pdf_bytes
+        # ========== FEINABSTIMMUNG & NEU-GENERIERUNG ==========
+        st.divider()
+        
+        st.subheader("Feinabstimmung & Neu-Generierung")
+        st.markdown("""
+        Hier kannst du Prioritäten, Lernaufwand, belegte Zeiten und Lern-Limits anpassen. 
+        Anschliessend kannst du einen neuen Lernplan auf Basis deiner aktualisierten Einstellungen erstellen.
+        """)
+        
+        # Create tabs for different adjustment categories
+        adj_tabs = st.tabs(["Prioritäten & Aufwand", "Belegte Zeiten", "Lernpräferenzen"])
+        
+        # ========== TAB 1: PRIORITÄTEN & LERNAUFWAND ==========
+        with adj_tabs[0]:
+            st.markdown("**Passe Prioritätslevel und Lernaufwand für jeden Leistungsnachweis an.**")
+            st.caption("Höhere Werte = mehr Lernzeit zugeteilt")
+            
+            if st.session_state.leistungsnachweise:
+                for idx, ln in enumerate(st.session_state.leistungsnachweise):
+                    with st.container():
+                        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                        
+                        with col1:
+                            st.markdown(f"**{ln['title']}** ({ln['type']})")
+                            if ln.get('deadline'):
+                                st.caption(f"Fällig: {ln['deadline'].strftime('%d.%m.%Y')}")
+                            if ln.get('module'):
+                                st.caption(f"Modul: {ln['module']}")
+                        
+                        with col2:
+                            new_priority = st.slider(
+                                "Priorität",
+                                min_value=1,
+                                max_value=5,
+                                value=ln.get('priority', 3),
+                                key=f"priority_adjust_{idx}",
+                                help="1 = niedrige Priorität, 5 = hohe Priorität"
+                            )
+                            st.session_state.leistungsnachweise[idx]['priority'] = new_priority
+                        
+                        with col3:
+                            new_effort = st.slider(
+                                "Lernaufwand",
+                                min_value=1,
+                                max_value=5,
+                                value=ln.get('effort', 3),
+                                key=f"effort_adjust_{idx}",
+                                help="1 = wenig Aufwand, 5 = sehr viel Aufwand"
+                            )
+                            st.session_state.leistungsnachweise[idx]['effort'] = new_effort
+                        
+                        with col4:
+                            st.metric("", f"P:{new_priority} A:{new_effort}")
+                    
+                    if idx < len(st.session_state.leistungsnachweise) - 1:
+                        st.markdown("")
+                
+                st.success("✅ Änderungen werden automatisch gespeichert")
+            else:
+                st.info("Keine Leistungsnachweise vorhanden.")
+        
+        # ========== TAB 2: BELEGTE ZEITEN ==========
+        with adj_tabs[1]:
+            st.markdown("**Verwalte deine wiederkehrenden wöchentlichen Verpflichtungen.**")
+            
+            # Display existing busy times
+            if st.session_state.busy_times:
+                st.markdown("**Aktuelle belegte Zeiten:**")
+                
+                for idx, busy in enumerate(st.session_state.busy_times):
+                    col1, col2 = st.columns([4, 1])
+                    
+                    with col1:
+                        days_str = ", ".join(busy['days'])
+                        st.write(f"• **{busy['label']}**: {days_str} von {busy['start']} bis {busy['end']}")
+                    
+                    with col2:
+                        if st.button("🗑️", key=f"remove_busy_{idx}", help="Entfernen", use_container_width=True):
+                            st.session_state.busy_times.pop(idx)
+                            st.success("Belegte Zeit entfernt!")
+                            st.rerun()
+            else:
+                st.info("Keine belegten Zeiten konfiguriert.")
+            
+            # Add new busy time
+            with st.expander("➕ Neue belegte Zeit hinzufügen"):
+                with st.form("add_busy_time_adjust", clear_on_submit=True):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        new_busy_label = st.text_input("Bezeichnung", placeholder="z.B. Vorlesung, Meeting")
+                        new_busy_days = st.multiselect(
+                            "Tage",
+                            ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                            format_func=lambda x: {"Monday": "Montag", "Tuesday": "Dienstag", "Wednesday": "Mittwoch", 
+                                                   "Thursday": "Donnerstag", "Friday": "Freitag", "Saturday": "Samstag", 
+                                                   "Sunday": "Sonntag"}[x]
+                        )
+                    
+                    with col2:
+                        new_busy_start = st.time_input("Startzeit", value=None)
+                        new_busy_end = st.time_input("Endzeit", value=None)
+                    
+                    if st.form_submit_button("Hinzufügen", use_container_width=True):
+                        if new_busy_label and new_busy_days and new_busy_start and new_busy_end:
+                            st.session_state.busy_times.append({
+                                "label": new_busy_label,
+                                "days": new_busy_days,
+                                "start": new_busy_start.strftime("%H:%M"),
+                                "end": new_busy_end.strftime("%H:%M")
+                            })
+                            st.success("Belegte Zeit hinzugefügt!")
+                            st.rerun()
+                        else:
+                            st.error("Bitte fülle alle Felder aus.")
+        
+        # ========== TAB 3: LERNPRÄFERENZEN ==========
+        with adj_tabs[2]:
+            st.markdown("**Passe deine Lernstrategien und Limits an.**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Lernstrategien:**")
+                
+                spacing = st.checkbox(
+                    "Spaced Repetition",
+                    value=st.session_state.preferences.get("spacing", True),
+                    key="adjust_spacing",
+                    help="Verteile Lerneinheiten über mehrere Tage mit steigenden Intervallen"
+                )
+                st.session_state.preferences["spacing"] = spacing
+                
+                interleaving = st.checkbox(
+                    "Interleaving von Fächern",
+                    value=st.session_state.preferences.get("interleaving", False),
+                    key="adjust_interleaving",
+                    help="Mische verschiedene Leistungsnachweise innerhalb eines Tages"
+                )
+                st.session_state.preferences["interleaving"] = interleaving
+                
+                deep_work = st.checkbox(
+                    "Deep Work (lange Fokusblöcke)",
+                    value=st.session_state.preferences.get("deep_work", False),
+                    key="adjust_deep_work",
+                    help="Nutze längere Sessions (2-3h) für komplexe Themen"
+                )
+                st.session_state.preferences["deep_work"] = deep_work
+                
+                short_sessions = st.checkbox(
+                    "Kurze Sessions für Theorie",
+                    value=st.session_state.preferences.get("short_sessions", False),
+                    key="adjust_short_sessions",
+                    help="Nutze kürzere Sessions (45-60 Min) für theorielastige Inhalte"
+                )
+                st.session_state.preferences["short_sessions"] = short_sessions
+            
+            with col2:
+                st.markdown("**Lern-Limits:**")
+                
+                max_hours_day = st.number_input(
+                    "Max. Stunden pro Tag",
+                    min_value=1,
+                    max_value=12,
+                    value=st.session_state.preferences.get("max_hours_day", 6),
+                    key="adjust_max_hours_day",
+                    help="Maximale Lernstunden pro Tag"
+                )
+                st.session_state.preferences["max_hours_day"] = max_hours_day
+                
+                max_hours_week = st.number_input(
+                    "Max. Stunden pro Woche",
+                    min_value=5,
+                    max_value=80,
+                    value=st.session_state.preferences.get("max_hours_week", 30),
+                    key="adjust_max_hours_week",
+                    help="Maximale Lernstunden pro Woche (0 = unbegrenzt)"
+                )
+                st.session_state.preferences["max_hours_week"] = max_hours_week if max_hours_week > 0 else None
+                
+                min_session_duration = st.number_input(
+                    "Min. Session-Dauer (Minuten)",
+                    min_value=15,
+                    max_value=120,
+                    value=st.session_state.preferences.get("min_session_duration", 60),
+                    step=15,
+                    key="adjust_min_session_duration",
+                    help="Minimale Länge einer Lerneinheit"
+                )
+                st.session_state.preferences["min_session_duration"] = min_session_duration
+        
+        # ========== NEU-GENERIERUNG BUTTON ==========
+        st.markdown("---")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            if st.button("🔄 Lernplan mit aktualisierten Einstellungen neu generieren", type="primary", use_container_width=True, key="regenerate_plan"):
+                with st.spinner("🧠 KI erstellt deinen aktualisierten Lernplan..."):
+                    # Recalculate free slots with updated settings
+                    free_slots = calculate_free_slots()
+                    st.session_state.free_slots = free_slots
+                    
+                    if not free_slots:
+                        st.error("❌ Keine freien Zeitfenster gefunden. Bitte überprüfe deine Einstellungen.")
+                    else:
+                        # Regenerate plan
+                        success = generate_plan_via_ai()
+                        
+                        if success:
+                            st.success(f"✅ Lernplan erfolgreich neu generiert! {len(st.session_state.plan)} Lerneinheiten gefunden.")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error("❌ Plan-Generierung fehlgeschlagen.")
 
 
 def show_export_page():
@@ -1937,34 +1422,8 @@ def show_export_page():
     
     st.markdown("---")
     
-    # Preview
-    st.subheader("📋 Vorschau")
-    st.markdown("Erste 5 Einheiten aus deinem Lernplan:")
-    
-    # Sort plan chronologically
+    # Sort plan chronologically for export
     sorted_plan = sorted(plan, key=lambda x: (x.get("date", ""), x.get("start", "")))
-    
-    preview_data = []
-    for session in sorted_plan[:5]:
-        try:
-            session_date = datetime.fromisoformat(session.get("date", "")).date()
-            date_str = session_date.strftime("%a, %d %b %Y")
-        except:
-            date_str = session.get("date", "Unbekannt")
-        
-        preview_data.append({
-            "Datum": date_str,
-            "Zeit": f"{session.get('start', 'N/A')} - {session.get('end', 'N/A')}",
-            "Modul": session.get("module", "N/A"),
-            "Thema": session.get("topic", "N/A")
-        })
-    
-    st.dataframe(preview_data, use_container_width=True, hide_index=True)
-    
-    if len(sorted_plan) > 5:
-        st.caption(f"... und {len(sorted_plan) - 5} weitere Einheiten")
-    
-    st.markdown("---")
     
     # Export options
     st.subheader("💾 Export-Optionen")
@@ -2002,34 +1461,5 @@ def show_export_page():
     
     st.markdown("---")
     
-    # Future export options (placeholders)
-    st.markdown("### 🔮 Bald verfügbar")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.button("📅 Export zu iCal", disabled=True, use_container_width=True)
-        st.caption("*Kalender-Integration bald verfügbar*")
-    
-    with col2:
-        st.button("📊 Export zu Excel", disabled=True, use_container_width=True)
-        st.caption("*Tabellen-Format bald verfügbar*")
-    
-    with col3:
-        st.button("📧 Plan per E-Mail", disabled=True, use_container_width=True)
-        st.caption("*E-Mail-Versand bald verfügbar*")
-    
-    st.markdown("---")
-    
-    # Tips
-    st.info("""
-    **💡 Tipps:**
-    - Drucke das PDF aus und behalte es an deinem Schreibtisch sichtbar
-    - Importiere es in deinen digitalen Kalender für automatische Erinnerungen
-    - Teile es mit Lernpartnern oder Beratern
-    - Aktualisiere und exportiere neu, wenn du Anpassungen vornimmst
-    """)
-
-
 if __name__ == "__main__":
     main()

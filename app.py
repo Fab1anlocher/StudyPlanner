@@ -47,6 +47,19 @@ def calculate_free_slots():
         st.error("❌ Kein Enddatum verfügbar. Bitte füge mindestens einen Leistungsnachweis mit Fälligkeitsdatum hinzu.")
         return []
     
+    # Ensure study_start and study_end are date objects, not time or datetime objects
+    if isinstance(study_start, datetime):
+        study_start = study_start.date()
+    elif not isinstance(study_start, date):
+        st.error(f"❌ Ungültiges Startdatum-Format. Bitte gehe zur Einrichtung.")
+        return []
+    
+    if isinstance(study_end, datetime):
+        study_end = study_end.date()
+    elif not isinstance(study_end, date):
+        st.error(f"❌ Ungültiges Enddatum-Format. Bitte gehe zur Einrichtung.")
+        return []
+    
     busy_times = st.session_state.busy_times
     absences = st.session_state.absences
     rest_days = st.session_state.preferences.get("rest_days", [])
@@ -87,12 +100,14 @@ def calculate_free_slots():
             current_date += timedelta(days=1)
             continue
         
-        # Start with full potential study window (6:00 AM to 11:00 PM)
-        study_start = time(6, 0)
-        study_end = time(23, 0)
+        # Get user-defined daily study window from preferences
+        earliest_time_str = st.session_state.preferences.get("earliest_study_time", "06:00")
+        latest_time_str = st.session_state.preferences.get("latest_study_time", "22:00")
+        daily_study_start = datetime.strptime(earliest_time_str, "%H:%M").time()
+        daily_study_end = datetime.strptime(latest_time_str, "%H:%M").time()
         
-        # Create initial free intervals for this day
-        free_intervals = [(study_start, study_end)]
+        # Create initial free intervals for this day (only within allowed time window)
+        free_intervals = [(daily_study_start, daily_study_end)]
         
         # Get all busy times that apply to this weekday
         applicable_busy_times = [bt for bt in busy_times if weekday_name in bt["days"]]
@@ -776,12 +791,33 @@ def show_setup_page():
             help="Kürzeste akzeptable Lerneinheit-Länge"
         )
     
+    st.markdown("**Erlaubtes Zeitfenster pro Tag:**")
+    st.markdown("Lege fest, wann die KI Lernzeiten einplanen darf (verhindert Lernen in der Nacht).")
+    
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        earliest_study_time = st.time_input(
+            "Früheste Lernzeit",
+            value=datetime.strptime(st.session_state.preferences.get("earliest_study_time", "06:00"), "%H:%M").time(),
+            help="Ab dieser Uhrzeit darf der Planer Lernzeiten einplanen."
+        )
+    
+    with col4:
+        latest_study_time = st.time_input(
+            "Späteste Lernzeit",
+            value=datetime.strptime(st.session_state.preferences.get("latest_study_time", "22:00"), "%H:%M").time(),
+            help="Bis zu dieser Uhrzeit darf der Planer Lernzeiten einplanen (kein Lernen in der Nacht)."
+        )
+    
     # Update preferences in session state
     st.session_state.preferences.update({
         "rest_days": rest_days,
         "max_hours_day": max_hours_day,
         "max_hours_week": max_hours_week if max_hours_week > 0 else None,
-        "min_session_duration": min_session_duration
+        "min_session_duration": min_session_duration,
+        "earliest_study_time": earliest_study_time.strftime("%H:%M"),
+        "latest_study_time": latest_study_time.strftime("%H:%M")
     })
     
     st.success("✅ Einstellungen automatisch gespeichert")
@@ -827,6 +863,48 @@ def show_setup_page():
         "deep_work": deep_work,
         "short_sessions": short_sessions
     })
+    
+    st.markdown("---")
+    
+    # Time-of-day preferences
+    st.markdown("**Wann lernst du am liebsten?**")
+    st.markdown("Diese Angabe ist eine Präferenz. Die KI versucht, deinen Lernplan eher in diesen Zeiten zu platzieren, kann aber bei Bedarf davon abweichen.")
+    
+    col_tod1, col_tod2, col_tod3 = st.columns(3)
+    
+    current_preferred_times = st.session_state.preferences.get("preferred_times_of_day", [])
+    
+    with col_tod1:
+        prefer_morning = st.checkbox(
+            "Morgens (ca. 06:00–11:00)",
+            value="morning" in current_preferred_times,
+            help="Du bevorzugst es, morgens zu lernen"
+        )
+    
+    with col_tod2:
+        prefer_afternoon = st.checkbox(
+            "Nachmittags (ca. 12:00–17:00)",
+            value="afternoon" in current_preferred_times,
+            help="Du bevorzugst es, nachmittags zu lernen"
+        )
+    
+    with col_tod3:
+        prefer_evening = st.checkbox(
+            "Abends (ca. 18:00–22:00)",
+            value="evening" in current_preferred_times,
+            help="Du bevorzugst es, abends zu lernen"
+        )
+    
+    # Build list of preferred times
+    preferred_times_of_day = []
+    if prefer_morning:
+        preferred_times_of_day.append("morning")
+    if prefer_afternoon:
+        preferred_times_of_day.append("afternoon")
+    if prefer_evening:
+        preferred_times_of_day.append("evening")
+    
+    st.session_state.preferences["preferred_times_of_day"] = preferred_times_of_day
     
     st.success("✅ Lernpräferenzen gespeichert")
     
@@ -1281,6 +1359,7 @@ def display_weekly_view(sorted_plan):
                 weeks[week_key] = {
                     "start": week_start,
                     "end": week_end,
+                    "week_number": iso_week,
                     "sessions": []
                 }
             
@@ -1295,12 +1374,17 @@ def display_weekly_view(sorted_plan):
     # Sort weeks chronologically
     sorted_weeks = sorted(weeks.items(), key=lambda x: x[1]["start"])
     
+    # German weekday names
+    day_names_full = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+    day_names_short = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    
     # Display each week
-    for week_num, (week_key, week_data) in enumerate(sorted_weeks, 1):
+    for week_key, week_data in sorted_weeks:
         week_start = week_data["start"]
         week_end = week_data["end"]
+        week_num = week_data["week_number"]
         
-        st.markdown(f"### Woche {week_num} ({week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')})")
+        st.markdown(f"### Woche {week_num} ({week_start.strftime('%d.%m.')} – {week_end.strftime('%d.%m.%Y')})")
         
         # Group sessions by weekday
         days_sessions = {i: [] for i in range(7)}  # 0=Monday, 6=Sunday
@@ -1313,16 +1397,19 @@ def display_weekly_view(sorted_plan):
             except:
                 continue
         
+        # Sort sessions within each day by start time
+        for day_idx in range(7):
+            days_sessions[day_idx] = sorted(days_sessions[day_idx], key=lambda x: x.get("start", ""))
+        
         # Create 7 columns for days of the week
         cols = st.columns(7)
-        day_names = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
         
         for day_idx, col in enumerate(cols):
             with col:
                 # Calculate the actual date for this day
                 day_date = week_start + timedelta(days=day_idx)
-                st.markdown(f"**{day_names[day_idx]}**")
-                st.caption(day_date.strftime("%d %b"))
+                st.markdown(f"**{day_names_short[day_idx]}**")
+                st.caption(day_date.strftime("%d.%m."))
                 
                 sessions_today = days_sessions[day_idx]
                 
@@ -1334,16 +1421,20 @@ def display_weekly_view(sorted_plan):
                         module = session.get("module", "Unknown")
                         topic = session.get("topic", "N/A")
                         
+                        # Truncate long titles for display
+                        module_display = module[:20] + "..." if len(module) > 20 else module
+                        topic_display = topic[:25] + "..." if len(topic) > 25 else topic
+                        
                         # Use a container with custom styling
                         st.markdown(f"""
-                        <div style="background-color: #f0f2f6; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
-                            <div style="font-size: 0.8em; font-weight: bold;">{start}-{end}</div>
-                            <div style="font-size: 0.85em; margin-top: 4px;"><b>{module}</b></div>
-                            <div style="font-size: 0.75em; color: #666; margin-top: 2px;">{topic}</div>
+                        <div style="background-color: #f0f2f6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #0066cc;">
+                            <div style="font-size: 0.75em; font-weight: bold; color: #0066cc;">{start}–{end}</div>
+                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600;">{module_display}</div>
+                            <div style="font-size: 0.7em; color: #666; margin-top: 2px;">{topic_display}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.markdown("<div style='color: #999; font-size: 0.85em;'>Keine Einheiten</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='color: #999; font-size: 0.8em; font-style: italic;'>Kein Lernen</div>", unsafe_allow_html=True)
         
         st.markdown("---")
 
@@ -1355,6 +1446,17 @@ def display_list_view(sorted_plan):
     Args:
         sorted_plan (list): Sorted list of study session dicts
     """
+    
+    # German weekday names
+    german_weekdays = {
+        "Monday": "Montag",
+        "Tuesday": "Dienstag",
+        "Wednesday": "Mittwoch",
+        "Thursday": "Donnerstag",
+        "Friday": "Freitag",
+        "Saturday": "Samstag",
+        "Sunday": "Sonntag"
+    }
     
     # Group sessions by date
     sessions_by_date = {}
@@ -1368,13 +1470,19 @@ def display_list_view(sorted_plan):
     for date_str in sorted(sessions_by_date.keys()):
         try:
             session_date = datetime.fromisoformat(date_str).date()
-            date_display = session_date.strftime("%A, %d %B %Y")
+            # Get English weekday name and translate to German
+            weekday_en = session_date.strftime("%A")
+            weekday_de = german_weekdays.get(weekday_en, weekday_en)
+            date_display = f"{weekday_de}, {session_date.strftime('%d. %B %Y')}"
         except:
             date_display = date_str
         
         st.markdown(f"### 📅 {date_display}")
         
         sessions = sessions_by_date[date_str]
+        
+        # Sort sessions by start time
+        sessions = sorted(sessions, key=lambda x: x.get("start", ""))
         
         for session in sessions:
             start = session.get("start", "N/A")
@@ -1390,9 +1498,10 @@ def display_list_view(sorted_plan):
                 st.markdown(f"**{start} – {end}**")
             
             with col2:
-                st.markdown(f"**{module}: {topic}**")
+                st.markdown(f"**{module}**")
+                st.markdown(f"📖 {topic}")
                 if description:
-                    st.caption(description)
+                    st.caption(f"📝 {description}")
         
         st.markdown("---")
 
@@ -1676,6 +1785,17 @@ def create_plan_pdf(plan):
         bytes: PDF file as bytes
     """
     
+    # German weekday names
+    german_weekdays = {
+        "Monday": "Montag",
+        "Tuesday": "Dienstag",
+        "Wednesday": "Mittwoch",
+        "Thursday": "Donnerstag",
+        "Friday": "Freitag",
+        "Saturday": "Samstag",
+        "Sunday": "Sonntag"
+    }
+    
     # Create PDF object
     pdf = FPDF()
     pdf.add_page()
@@ -1683,13 +1803,13 @@ def create_plan_pdf(plan):
     
     # Title
     pdf.set_font("Helvetica", "B", 20)
-    pdf.cell(0, 10, "AI Study Plan", ln=True, align="C")
+    pdf.cell(0, 10, "Personalisierter Lernplan", ln=True, align="C")
     pdf.ln(5)
     
     # Study plan dates
     pdf.set_font("Helvetica", "", 12)
-    study_start = st.session_state.study_start.strftime("%d %B %Y")
-    study_end = st.session_state.study_end.strftime("%d %B %Y") if st.session_state.study_end else "N/A"
+    study_start = st.session_state.study_start.strftime("%d. %B %Y")
+    study_end = st.session_state.study_end.strftime("%d. %B %Y") if st.session_state.study_end else "N/A"
     pdf.cell(0, 8, f"Lernplan: {study_start} - {study_end}", ln=True, align="C")
     pdf.ln(10)
     
@@ -1703,10 +1823,12 @@ def create_plan_pdf(plan):
     
     # Iterate through each date
     for date_str in sorted(sessions_by_date.keys()):
-        # Parse and format date
+        # Parse and format date with German weekday
         try:
             session_date = datetime.fromisoformat(date_str).date()
-            date_display = session_date.strftime("%A, %d %B %Y")
+            weekday_en = session_date.strftime("%A")
+            weekday_de = german_weekdays.get(weekday_en, weekday_en)
+            date_display = f"{weekday_de}, {session_date.strftime('%d. %B %Y')}"
         except:
             date_display = date_str
         
@@ -1727,16 +1849,21 @@ def create_plan_pdf(plan):
             
             # Time (bold)
             pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(40, 6, f"{start} - {end}", ln=False)
+            pdf.cell(35, 6, f"{start} - {end}", ln=False)
             
-            # Module and topic
-            pdf.set_font("Helvetica", "", 11)
-            pdf.multi_cell(0, 6, f"{module}: {topic}")
+            # Module
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(0, 6, module, ln=True)
+            
+            # Topic (indented)
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_x(45)
+            pdf.cell(0, 5, f"Thema: {topic}", ln=True)
             
             # Description (indented, smaller font)
             if description:
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_x(50)  # Indent
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_x(45)
                 pdf.multi_cell(0, 5, description)
             
             pdf.ln(2)

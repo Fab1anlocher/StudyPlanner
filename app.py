@@ -2,13 +2,7 @@
 KI-Lernplaner für Studierende
 
 Eine Streamlit Web-Anwendung, die Studierenden hilft, einen KI-basierten Lernplan
-für ihr Semester zu erstellen. Nutzt OpenAI GPT-4o-mini für intelligente Plan-Generierung.
-
-Installation:
-    pip install -r requirements.txt
-    
-Anwendung:
-    streamlit run app.py
+für ihr Semester zu erstellen. 
 
 Autor: Locher, Wirth & Heiniger
 Projekt: StudyPlanner
@@ -19,8 +13,11 @@ from datetime import date, time, datetime, timedelta
 import json
 from openai import OpenAI
 
-# Import prompt templates
-from prompts import get_system_prompt, build_user_prompt
+# Import prompt configuration FIRST
+from prompt_config import get_active_prompts, AVAILABLE_VERSIONS, ACTIVE_PROMPT_VERSION
+
+# Get active prompts from configuration
+get_system_prompt, build_user_prompt = get_active_prompts()
 
 # Import planning functions
 from planning import calculate_free_slots as calc_free_slots
@@ -30,6 +27,9 @@ from display_plan import display_plan_views
 
 # Import PDF export
 from pdf_export import create_plan_pdf
+
+# Import test data
+from test_data import load_test_data_into_session_state
 
 
 def calculate_free_slots():
@@ -239,7 +239,7 @@ def generate_plan_via_ai():
                 {"role": "user", "content": user_message}
             ],
             temperature=0.7,
-            max_tokens=4000
+            max_tokens=16000  # Erhöht für längere Pläne
         )
         
         # Extract response content
@@ -361,6 +361,36 @@ def main():
     )
     
     st.sidebar.markdown("---")
+    
+    # TEST-MODUS Button
+    st.sidebar.subheader("🧪 Test-Modus")
+    st.sidebar.markdown("Lade vordefinierte Test-Daten eines BWL-Studenten:")
+    
+    # Prompt-Version Auswahl
+    selected_version = st.sidebar.selectbox(
+        "Prompt-Version:",
+        options=list(AVAILABLE_VERSIONS.keys()),
+        format_func=lambda x: AVAILABLE_VERSIONS[x],
+        index=list(AVAILABLE_VERSIONS.keys()).index(ACTIVE_PROMPT_VERSION),
+        key="prompt_version_selector"
+    )
+    
+    # Version in Session State speichern
+    if 'selected_prompt_version' not in st.session_state:
+        st.session_state.selected_prompt_version = ACTIVE_PROMPT_VERSION
+    
+    if selected_version != st.session_state.selected_prompt_version:
+        st.session_state.selected_prompt_version = selected_version
+        # Prompts neu laden
+        from prompt_config import set_active_version
+        set_active_version(selected_version)
+        st.sidebar.success(f"✅ Gewechselt zu: {AVAILABLE_VERSIONS[selected_version]}")
+    
+    if st.sidebar.button("📋 Test-Daten laden", type="primary", use_container_width=True):
+        load_test_data_into_session_state(st)
+        st.rerun()
+    
+    st.sidebar.markdown("---")
     st.sidebar.info("💡 Beginne mit **Einrichtung**, um deine Prüfungen und Leistungsnachweise zu erfassen.")
     
     # Route to the selected page
@@ -373,12 +403,6 @@ def main():
 
 
 def show_setup_page():
-    """
-    Setup page - Wizard for entering assessments, exams, and basic configuration.
-    """
-    st.header("⚙️ Einrichtungs-Assistent")
-    st.markdown("Konfiguriere dein Semester, deine Leistungsnachweise und API-Einstellungen, um zu beginnen.")
-    
     # ========== SECTION 1: STUDY PLAN START DATE ==========
     st.subheader("1️⃣ Start deines Lernplans")
     st.markdown("Ab wann möchtest du aktiv mit dem Lernen beginnen?")
@@ -387,7 +411,7 @@ def show_setup_page():
         "Lernplan-Start",
         value=st.session_state.study_start,
         format="DD.MM.YYYY",
-        help="Ab wann möchtest du aktiv mit dem Lernen beginnen?"
+        help="Ab wann möchtest du mit dem Lernplan beginnen?"
     )
     st.session_state.study_start = study_start
     

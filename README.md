@@ -1,135 +1,335 @@
-# AI Lernplaner für Studierende
+# 🎓 AI Study Planner - KI-basierter Lernplaner
 
-Ein intelligenter Lernplaner für Studierende, der mithilfe von künstlicher Intelligenz (OpenAI) einen personalisierten Lernplan für dein Semester erstellt.
+<div align="center">
 
-## Projektbeschreibung
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Streamlit](https://img.shields.io/badge/streamlit-1.29.0-red.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-Diese Streamlit-App hilft dir, deine Lernzeit optimal zu organisieren. Du gibst deine Module, Prüfungstermine, Arbeitszeiten und Abwesenheiten ein, und die KI generiert einen detaillierten, auf deine Bedürfnisse zugeschnittenen Lernplan. Der Plan berücksichtigt wissenschaftliche Lernstrategien wie Spaced Repetition, Interleaving und Deep Work.
+**Ein intelligenter Lernplaner für Studierende mit KI-Unterstützung (OpenAI & Google Gemini)**
 
-## Features
+[🚀 Demo](#demo) • [📖 Features](#features) • [⚡ Quick Start](#quick-start) • [📚 Dokumentation](#dokumentation)
 
-- ✅ **Modulverwaltung**: Erfasse deine Module mit Prüfungsterminen, Themen und Prioritäten
-- ✅ **Zeiterfassung**: Trage deine wiederkehrenden Verpflichtungen ein (Arbeit, Vorlesungen, Sport)
-- ✅ **Abwesenheiten**: Plane Ferien, Militär oder andere Abwesenheiten ein
-- ✅ **Lernpräferenzen**: Wähle aus verschiedenen Lernstrategien:
-  - Spaced Repetition (verteiltes Wiederholen)
-  - Interleaving (Themenwechsel)
-  - Deep Work (fokussierte Lernblöcke)
-  - Kurze Sessions für theorielastige Fächer
-- ✅ **Automatische Berechnung**: Die App berechnet alle verfügbaren freien Zeitfenster im Semester
-- ✅ **KI-generierter Lernplan**: OpenAI erstellt einen optimierten Lernplan basierend auf deinen Eingaben
-- ✅ **Flexible Ansichten**: 
-  - Wochenansicht (Kalender-Darstellung)
-  - Listenansicht (chronologische Übersicht)
-- ✅ **Anpassungen**: Ändere Prioritäten und Einstellungen und generiere den Plan neu
-- ✅ **PDF-Export**: Lade deinen Lernplan als PDF herunter
+</div>
 
-## Installation
+---
 
-1. Repository klonen:
+## 📖 Über das Projekt
+
+Der **AI Study Planner** hilft Studierenden, ihre Lernzeit optimal zu organisieren. Du gibst deine Prüfungstermine, Arbeitszeiten und Präferenzen ein - die KI generiert einen personalisierten Lernplan basierend auf wissenschaftlichen Lernstrategien.
+
+### ✨ Features
+
+#### 🤖 KI-Powered Planning
+- **Multi-LLM Support**: OpenAI (GPT-4o, GPT-4o-mini, GPT-3.5) oder Google Gemini
+- **Prompt Engineering**: 4 vordefinierte Strategien + manueller Editor
+- **Prüfungsformat-Awareness**: Unterschiedliche Lernmethoden für Multiple Choice, Coding, Essays, etc.
+
+#### 📅 Intelligente Zeitplanung
+- **Automatische Berechnung** freier Zeitfenster
+- Berücksichtigt Vorlesungen, Arbeit, Hobbys
+- **Spaced Repetition**, Interleaving, Deep Work
+- Ruhetage und Abwesenheiten
+
+#### 🎨 Flexible Darstellung
+- **Wochenansicht**: Kalender mit Prüfungsterminen (🎯)
+- **Listenansicht**: Chronologische Übersicht
+- **PDF-Export**: Für Offline-Nutzung
+
+#### 🧪 Experimentier-Modus
+- **Manueller Prompt-Editor**: Eigene Prompts ohne Code schreiben
+- **Export/Import**: Prompts als JSON speichern und teilen
+- **5 Template-Prompts** für verschiedene Strategien
+- **Test-Modus**: Vordefinierte Daten zum Ausprobieren
+
+---
+
+## ⚡ Quick Start
+
+### 1️⃣ Installation
+
 ```bash
-git clone https://github.com/Fab1anlocher/SmartStudyAssistant.git
-cd SmartStudyAssistant
-```
+# Repository klonen
+git clone https://github.com/Fab1anlocher/StudyPlanner.git
+cd StudyPlanner
 
-2. Abhängigkeiten installieren:
-```bash
+# Virtual Environment erstellen (empfohlen)
+python -m venv .venv
+
+# Virtual Environment aktivieren
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+
+# Abhängigkeiten installieren
 pip install -r requirements.txt
 ```
 
-## Anwendung starten
-
-Starte die App mit folgendem Befehl:
+### 2️⃣ App starten
 
 ```bash
 streamlit run app.py
 ```
 
-Die App öffnet sich automatisch im Browser unter `http://localhost:8501`.
+Die App öffnet sich automatisch im Browser unter `http://localhost:8501`
 
-### OpenAI API Key
+### 3️⃣ API Key konfigurieren
 
-**Wichtig**: Du benötigst einen eigenen OpenAI API Key, um die KI-Funktionen zu nutzen.
+**Option A: OpenAI**
+1. Account erstellen auf [platform.openai.com](https://platform.openai.com/)
+2. API Key generieren unter "API Keys"
+3. In der App: Sidebar → **Provider: OpenAI** → Key eingeben
 
-1. Erstelle einen Account auf [platform.openai.com](https://platform.openai.com/)
-2. Generiere einen API Key unter "API Keys"
-3. Gib den Key in der App auf der "Einrichtung"-Seite unter "OpenAI API-Konfiguration" ein
+**Option B: Google Gemini**
+1. Account erstellen auf [ai.google.dev](https://ai.google.dev/)
+2. API Key generieren
+3. In der App: Sidebar → **Provider: Gemini** → Key eingeben
 
-Der API Key wird nur in deiner Browser-Session gespeichert und nie auf einem Server abgelegt.
-
-## Projekt-Struktur
-
-```
-StudyPlanner/
-├── app.py              # Hauptanwendung mit UI und Logik
-├── prompts.py          # LLM-Prompt-Vorlagen (getrennt für einfache Anpassung)
-├── requirements.txt    # Python-Abhängigkeiten
-├── README.md           # Diese Datei
-└── .gitignore         # Git-Ausschlüsse
-```
-
-## Verwendung
-
-### 1. Einrichtung
-- **Semester-Daten**: Wähle Start- und Enddatum deines Semesters
-- **Module**: Füge alle Module mit Prüfungsdatum, Themen und Priorität hinzu
-- **API-Schlüssel**: Trage deinen OpenAI API Key ein
-- **Belegte Zeiten**: Erfasse wiederkehrende Termine (z.B. Arbeit Mo-Fr 08:00-17:00)
-- **Abwesenheiten**: Trage Ferien und andere Abwesenheiten ein
-- **Ruhetage**: Wähle deine Ruhetage (z.B. Sonntag)
-- **Lern-Limits**: Setze maximale Lernstunden pro Tag und Woche
-- **Lernpräferenzen**: Aktiviere gewünschte Lernstrategien
-
-### 2. Lernplan generieren
-- **Schritt 1**: Berechne freie Zeitfenster (berücksichtigt alle deine Einschränkungen)
-- **Schritt 2**: Lasse die KI einen optimierten Lernplan erstellen
-- Betrachte den Plan in Wochen- oder Listenansicht
-
-### 3. Anpassungen
-- Ändere Modul-Prioritäten
-- Passe belegte Zeiten an
-- Modifiziere Lernpräferenzen
-- Generiere den Plan mit den neuen Einstellungen neu
-
-### 4. Export
-- Lade deinen Lernplan als PDF herunter
-- Drucke ihn aus oder importiere ihn in deinen Kalender
-
-## Hinweise
-
-### Datenspeicherung
-- Alle Daten werden nur in der aktuellen Browser-Session gespeichert (Streamlit Session State)
-- Beim Neuladen der Seite gehen die Daten verloren
-- Es gibt keine Datenbank oder Benutzerkonten
-- Deine Daten verlassen deinen Browser nur für die OpenAI API-Anfrage
-
-### Anpassung der Prompts
-Die KI-Prompts können in der Datei `prompts.py` angepasst werden:
-- `get_system_prompt()`: Definiert die Rolle und Verhaltensweise der KI
-- `build_user_prompt(data)`: Erstellt den Kontext für die Plan-Generierung
-
-Du kannst diese Funktionen bearbeiten, um die KI-Ausgabe zu beeinflussen (z.B. mehr Pausen, kürzere Sessions, andere Lernstrategien).
-
-### Kosten
-Die Verwendung der OpenAI API verursacht Kosten. Das verwendete Modell (`gpt-4o-mini`) ist sehr günstig:
-- Eine Plan-Generierung kostet ca. $0.01-0.05
-- Prüfe deine API-Nutzung regelmässig auf [platform.openai.com](https://platform.openai.com/usage)
-
-## Technische Details
-
-- **Framework**: Streamlit 1.29.0
-- **KI-Modell**: OpenAI GPT-4o-mini
-- **PDF-Generierung**: fpdf2
-- **Sprache**: Python 3.8+
-
-## Lizenz
-
-Dieses Projekt wurde als Studienprojekt entwickelt und steht für Bildungszwecke zur Verfügung.
-
-## Support
-
-Bei Fragen oder Problemen öffne ein Issue auf GitHub oder kontaktiere den Entwickler.
+> 💡 **Tipp**: Gemini hat ein großzügiges kostenloses Kontingent!
 
 ---
 
-**Viel Erfolg beim Lernen!** 🎓📚
+## 🎯 Verwendung
+
+### Schritt 1: Einrichtung (Seite "Einrichtung")
+
+1. **API-Konfiguration**
+   - Wähle Provider (OpenAI/Gemini) und Modell
+   - Trage API Key ein
+
+2. **Semester-Daten**
+   - Start- und Enddatum
+
+3. **Leistungsnachweise hinzufügen**
+   - Typ (Prüfung, Hausarbeit, Präsentation, Projektarbeit)
+   - Deadline und Prüfungsformat
+   - Themen und Priorität
+
+4. **Belegte Zeiten** (optional)
+   - Vorlesungen, Arbeit, Sport, etc.
+
+5. **Abwesenheiten** (optional)
+   - Ferien, Militär, etc.
+
+6. **Lernpräferenzen**
+   - Ruhetage, maximale Lernzeit
+   - Spaced Repetition, Deep Work, etc.
+
+> 💡 **Quick-Test**: Klicke auf **"📋 Test-Daten laden"** für ein vordefiniertes BWL-Student-Profil!
+
+### Schritt 2: Plan generieren (Seite "Lernplan")
+
+1. **Zeitfenster berechnen**
+   - Klicke auf **"⏰ Freie Zeitfenster berechnen"**
+   - System berechnet verfügbare Lernzeiten
+
+2. **KI-Plan erstellen**
+   - Klicke auf **"🤖 Plan mit KI generieren"**
+   - KI erstellt optimierten Lernplan
+
+3. **Plan anzeigen**
+   - **Wochenansicht**: Kalender mit farbcodierten Sessions
+   - **Listenansicht**: Chronologische Übersicht
+
+4. **PDF exportieren** (optional)
+   - Klicke auf **"📥 Plan als PDF herunterladen"**
+
+---
+
+## 🧪 Prompt Engineering
+
+### Vordefinierte Versionen
+
+Sidebar → **Prompt Konfiguration** → **"Vorlagen"**
+
+| Version | Strategie | Beschreibung |
+|---------|-----------|--------------|
+| **V1: Zero-Shot** | Baseline | Direkte Anweisungen ohne Beispiele |
+| **V2: Few-Shot** | Beispiele | Zeigt konkrete Beispiele |
+| **V3: Chain-of-Thought** | Reasoning | Schrittweises Denken |
+| **V4: Few-Shot + CoT** | Hybrid | Kombination aus V2 & V3 |
+
+### Manueller Modus (Experimentieren)
+
+Sidebar → **Prompt Konfiguration** → **"Manuell"**
+
+1. **Prompts bearbeiten**
+   - System Prompt: Rolle & Regeln der KI
+   - User Prompt Template: Verwendet Platzhalter wie `{leistungsnachweise}`
+
+2. **Speichern**
+   - Klicke **"💾 Prompts übernehmen"**
+
+3. **Export/Import**
+   - **Export**: Speichere als JSON für Dokumentation
+   - **Import**: Lade gespeicherte Prompts
+
+4. **Templates nutzen**
+   - `prompt_templates/` Ordner enthält 5 fertige Templates
+   - `minimal_prompt.json` - Minimalistisch
+   - `balanced_prompt.json` - Ausgewogen
+   - `ultra_detailed_prompt.json` - Maximal detailliert
+   - `english_prompt.json` - Englische Version
+   - `example_custom_prompt.json` - Standard-Template
+
+**Siehe auch**: `PROMPT_TESTING.md` für ausführliche Anleitung
+
+---
+
+## 📁 Projektstruktur
+
+```
+StudyPlanner/
+├── app.py                  # 🎯 Hauptanwendung (Streamlit UI)
+├── planning.py             # ⏰ Zeitfenster-Berechnung
+├── display_plan.py         # 🎨 Plan-Visualisierung
+├── pdf_export.py           # 📄 PDF-Export
+├── test_data.py            # 🧪 Test-Daten (BWL-Student)
+├── prompt_config.py        # ⚙️ Prompt-Version Management
+│
+├── prompts/                # 📝 Vordefinierte Prompt-Versionen
+│   ├── __init__.py
+│   ├── v1_zero_shot.py
+│   ├── v2_few_shot.py
+│   ├── v3_chain_of_thought.py
+│   └── v4_few_shot_cot.py
+│
+├── prompt_templates/       # 🎨 Experimentelle Templates
+│   ├── README.md
+│   ├── minimal_prompt.json
+│   ├── balanced_prompt.json
+│   ├── ultra_detailed_prompt.json
+│   ├── english_prompt.json
+│   └── example_custom_prompt.json
+│
+├── requirements.txt        # 📦 Python Dependencies
+├── .gitignore             # 🚫 Git Exclusions
+├── README.md              # 📖 Diese Datei
+├── PROMPT_TESTING.md      # 🧪 Prompt-Testing Guide
+└── PROJEKTSTRUKTUR.md     # 🏗️ Technische Dokumentation
+```
+
+---
+
+## 🚀 Deployment
+
+### Streamlit Cloud (Empfohlen)
+
+1. **Repository vorbereiten**
+   ```bash
+   git add .
+   git commit -m "Prepare for deployment"
+   git push origin main
+   ```
+
+2. **Streamlit Cloud**
+   - Gehe zu [share.streamlit.io](https://share.streamlit.io)
+   - Verbinde GitHub Account
+   - Wähle Repository: `Fab1anlocher/StudyPlanner`
+   - Main file: `app.py`
+   - Deploy!
+
+3. **Secrets konfigurieren** (optional)
+   - App Settings → Secrets
+   - Füge API Keys hinzu (nicht empfohlen für Multi-User Apps)
+
+### Lokales Deployment
+
+```bash
+# Production-Modus
+streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+```
+
+---
+
+## 💰 API Kosten
+
+### OpenAI
+- **gpt-4o-mini**: ~$0.01-0.05 pro Plan (empfohlen)
+- **gpt-4o**: ~$0.10-0.30 pro Plan
+- **gpt-3.5-turbo**: ~$0.01-0.03 pro Plan
+
+Prüfe Nutzung: [platform.openai.com/usage](https://platform.openai.com/usage)
+
+### Google Gemini
+- **gemini-1.5-flash**: Großzügiges kostenloses Kontingent ⭐
+- **gemini-1.5-pro**: Ähnlich wie GPT-4o
+- **gemini-pro**: Ähnlich wie GPT-3.5
+
+Prüfe Nutzung: [ai.google.dev](https://ai.google.dev/)
+
+---
+
+## 📚 Dokumentation
+
+| Datei | Beschreibung |
+|-------|--------------|
+| **README.md** | Diese Datei - Übersicht & Quick Start |
+| **PROMPT_TESTING.md** | Ausführlicher Guide zum Prompt-Testing |
+| **prompt_templates/README.md** | Template-Übersicht & Experimentier-Ideen |
+| **PROJEKTSTRUKTUR.md** | Technische Architektur |
+
+---
+
+## 🛠️ Technologie-Stack
+
+- **Framework**: [Streamlit](https://streamlit.io/) 1.29.0
+- **LLM-Provider**: 
+  - [OpenAI](https://openai.com/) (GPT-4o, GPT-4o-mini, GPT-3.5-turbo)
+  - [Google Gemini](https://ai.google.dev/) (gemini-1.5-flash, gemini-1.5-pro)
+- **PDF-Export**: [fpdf2](https://pyfpdf.github.io/fpdf2/)
+- **Sprache**: Python 3.8+
+
+---
+
+## 🤝 Contributing
+
+Dieses Projekt wurde als Studienprojekt entwickelt. Contributions sind willkommen!
+
+1. Fork das Repository
+2. Erstelle einen Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit deine Änderungen (`git commit -m 'Add some AmazingFeature'`)
+4. Push zum Branch (`git push origin feature/AmazingFeature`)
+5. Öffne einen Pull Request
+
+---
+
+## 📝 Lizenz
+
+Dieses Projekt steht unter der MIT-Lizenz - siehe [LICENSE](LICENSE) für Details.
+
+---
+
+## 👥 Autoren
+
+- **Locher, Wirth & Heiniger**
+- Projekt: StudyPlanner
+- GitHub: [@Fab1anlocher](https://github.com/Fab1anlocher)
+
+---
+
+## 🙏 Danksagungen
+
+- Streamlit Team für das fantastische Framework
+- OpenAI & Google für die LLM APIs
+- Alle Beta-Tester für wertvolles Feedback
+
+---
+
+## 📞 Support
+
+Bei Fragen oder Problemen:
+- 🐛 [Issue erstellen](https://github.com/Fab1anlocher/StudyPlanner/issues)
+- 📧 Kontaktiere die Entwickler
+- 📖 Lies die [Dokumentation](#dokumentation)
+
+---
+
+<div align="center">
+
+**Viel Erfolg beim Lernen! 🎓📚**
+
+Made with ❤️ for students
+
+</div>

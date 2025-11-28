@@ -20,14 +20,20 @@ DENKE IN KLAREN SCHRITTEN (INTERN):
 1. Analysiere die Eingangsdaten:
    • Zeitraum
    • Module, Prüfungen, Abgabetermine, Workload
+   • Prüfungsformat (exam_format) und Details → wichtig für Lernstrategie!
    • Verfügbare Zeitslots
    • Präferenzen (z.B. max. Einheiten pro Tag, bevorzugte Tageszeiten)
 2. Bestimme Prioritäten:
    • Welche Prüfungen/Abgaben sind am dringendsten?
    • Welche Module haben hohen Workload?
-3. Schätze grob den Lernaufwand:
-   • Wie viele Einheiten (Sessions) braucht jedes Modul?
-   • Wie sollten diese über den Zeitraum verteilt werden?
+3. Schätze grob den Lernaufwand UND passe Strategie an Prüfungsformat an:
+   • Multiple Choice: Definitionen lernen, Karteikarten, Wiederholung
+   • Rechenaufgaben: Übungen rechnen, Lösungswege verstehen
+   • Mündliche Prüfung: Freies Erklären üben, Konzepte verstehen
+   • Essay/Aufsatz: Argumentation aufbauen, kritisch denken
+   • Praktisches Projekt (Open Book): Praktisch üben (z.B. SPSS, Coding)
+   • Coding-Aufgabe: Code schreiben, debuggen, Algorithmen
+   • Fallstudie: Analyse, Problemlösung, Theorie anwenden
 4. Verteile die Einheiten auf die freien Zeitslots:
    • Nutze nur die angegebenen freien Slots.
    • Plane zuerst die dringendsten Module.
@@ -108,6 +114,12 @@ SEMESTERZEITRAUM:
 {semester_start.isoformat()} bis {semester_end.isoformat()}
 
 LEISTUNGSNACHWEISE (Prüfungen, Abgaben, Projekte):
+Jeder Leistungsnachweis enthält:
+- title, type, deadline, module, topics, priority, effort
+- exam_format (nur bei Prüfungen): z.B. "Multiple Choice", "Rechenaufgaben" etc.
+- exam_details (nur bei Prüfungen): z.B. "90 Min, Closed Book"
+
+WICHTIG: Berücksichtige exam_format in deiner Planungsstrategie!
 {json.dumps(ln_serializable, ensure_ascii=False, indent=2)}
 
 VERFÜGBARE STUDY-SLOTS:

@@ -196,6 +196,19 @@ def display_weekly_view(sorted_plan):
                         'end': busy.get('end', '')
                     })
         
+        # Check for exams/deadlines on each day in this week
+        leistungsnachweise = st.session_state.get('leistungsnachweise', [])
+        days_exams = {i: [] for i in range(7)}
+        for day_idx in range(7):
+            day_date = week_start + timedelta(days=day_idx)
+            for ln in leistungsnachweise:
+                deadline = ln.get('deadline')
+                if deadline and deadline == day_date:
+                    days_exams[day_idx].append({
+                        'title': ln.get('title', 'Prüfung'),
+                        'type': ln.get('type', 'Prüfung')
+                    })
+        
         # Sort sessions within each day by start time
         for day_idx in range(7):
             days_sessions[day_idx] = sorted(days_sessions[day_idx], key=lambda x: x.get("start", ""))
@@ -213,6 +226,7 @@ def display_weekly_view(sorted_plan):
                 sessions_today = days_sessions[day_idx]
                 absences_today = days_absences[day_idx]
                 busy_today = days_busy[day_idx]
+                exams_today = days_exams[day_idx]
                 
                 # Check if day is completely absent (vacation, etc.)
                 if absences_today:
@@ -235,7 +249,21 @@ def display_weekly_view(sorted_plan):
                         st.markdown(f"""
                         <div style="background-color: #fff3e6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #ff9900;">
                             <div style="font-size: 0.75em; font-weight: bold; color: #ff9900;">⛔ {start}–{end}</div>
-                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600;">{label_display}</div>
+                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600; color: #663300;">{label_display}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Show exams/deadlines (IMPORTANT - show first!)
+                if exams_today:
+                    for exam in exams_today:
+                        title = exam.get('title', 'Prüfung')
+                        exam_type = exam.get('type', 'Prüfung')
+                        title_display = title[:18] + "..." if len(title) > 18 else title
+                        
+                        st.markdown(f"""
+                        <div style="background-color: #ffe6f0; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #cc0066; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.75em; font-weight: bold; color: #cc0066;">🎯 {exam_type}</div>
+                            <div style="font-size: 0.85em; margin-top: 4px; font-weight: 700; color: #990050;">{title_display}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 
@@ -262,7 +290,7 @@ def display_weekly_view(sorted_plan):
                         """, unsafe_allow_html=True)
                 
                 # Show message if completely empty day
-                if not sessions_today and not busy_today and not absences_today:
+                if not sessions_today and not busy_today and not absences_today and not exams_today:
                     st.markdown("<div style='color: #999; font-size: 0.75em; font-style: italic; padding: 4px;'>Frei</div>", unsafe_allow_html=True)
         
         st.markdown("---")

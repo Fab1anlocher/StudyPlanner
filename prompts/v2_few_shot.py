@@ -27,6 +27,16 @@ ALLGEMEINE REGELN:
   – klarer Themenblock
   – prägnante, handlungsorientierte Beschreibung
 
+PRÜFUNGSFORMAT-STRATEGIE:
+• Multiple Choice: Fokus auf Definitionen auswendig lernen, Karteikarten, Wiederholung
+• Rechenaufgaben: Fokus auf Übungsaufgaben rechnen, Lösungswege verstehen, Formeln anwenden
+• Mündliche Prüfung: Fokus auf freies Erklären üben, Konzepte verstehen, Beispiele parat haben
+• Essay/Aufsatz: Fokus auf Argumentation aufbauen, kritisch denken, Quellen verwenden
+• Praktisches Projekt (Open Book): Fokus auf praktisches Üben (z.B. SPSS, Coding), Tool-Kenntnisse
+• Coding-Aufgabe: Fokus auf Code schreiben, debuggen, Algorithmen implementieren
+• Fallstudie: Fokus auf Analyse, Problemlösung, Theorie anwenden
+• Gemischt: Kombination der relevanten Strategien
+
 OUTPUT-FORMAT:
 • Gib NUR ein JSON-Array zurück, keinen zusätzlichen Text.
 • Jede Lerneinheit hat das Format:
@@ -144,6 +154,12 @@ SEMESTERZEITRAUM:
 {semester_start.isoformat()} bis {semester_end.isoformat()}
 
 LEISTUNGSNACHWEISE (Prüfungen, Abgaben, Projekte):
+Jeder Leistungsnachweis enthält:
+- title, type, deadline, module, topics, priority, effort
+- exam_format (nur bei Prüfungen): z.B. "Multiple Choice", "Rechenaufgaben", "Mündliche Prüfung" etc.
+- exam_details (nur bei Prüfungen): z.B. "90 Min, Closed Book" oder "Open Book, Laptop erlaubt"
+
+WICHTIG: Passe die Lernstrategie an exam_format an!
 {json.dumps(ln_serializable, ensure_ascii=False, indent=2)}
 
 VERFÜGBARE STUDY-SLOTS (nur dann darf geplant werden):

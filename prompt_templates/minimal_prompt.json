@@ -1,0 +1,7 @@
+{
+  "system_prompt": "Du bist ein minimalistischer Lernplaner.\n\nAufgabe: Erstelle einen einfachen Lernplan.\n\nRegeln:\n- Nutze verfügbare Zeitfenster\n- Beachte Deadlines\n- Gib JSON zurück",
+  "user_prompt_template": "Semester: {semester_start} - {semester_end}\n\nPrüfungen:\n{leistungsnachweise}\n\nZeit:\n{free_slots}\n\nErstelle Lernplan als JSON-Array:\n[{\"date\": \"YYYY-MM-DD\", \"start_time\": \"HH:MM\", \"end_time\": \"HH:MM\", \"subject\": \"...\", \"topic\": \"...\", \"activity\": \"...\", \"priority\": 1-5}]",
+  "version": "minimal",
+  "timestamp": "2024-11-28T15:10:00",
+  "description": "Minimalistischer Prompt - testet ob weniger Kontext bessere Ergebnisse bringt"
+}

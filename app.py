@@ -12,6 +12,7 @@ import streamlit as st
 from datetime import date, time, datetime, timedelta
 import json
 from openai import OpenAI
+import google.generativeai as genai
 
 # Import prompt configuration FIRST
 from prompt_config import get_active_prompts, AVAILABLE_VERSIONS, ACTIVE_PROMPT_VERSION
@@ -203,7 +204,7 @@ def generate_plan_via_ai():
     
     # Validate preconditions
     if not st.session_state.openai_key:
-        st.error("❌ OpenAI API-Schlüssel fehlt. Bitte konfiguriere ihn auf der Einrichtungs-Seite.")
+        st.error("❌ API-Schlüssel fehlt. Bitte konfiguriere ihn auf der Einrichtungs-Seite (OpenAI oder Gemini).")
         return False
     
     if not st.session_state.leistungsnachweise:
@@ -215,9 +216,6 @@ def generate_plan_via_ai():
         return False
     
     try:
-        # Initialize OpenAI client
-        client = OpenAI(api_key=st.session_state.openai_key)
-        
         # Prepare data for prompt building
         prompt_data = {
             'semester_start': st.session_state.study_start,
@@ -227,23 +225,76 @@ def generate_plan_via_ai():
             'free_slots': st.session_state.free_slots
         }
         
-        # Get prompts from prompts module
-        system_message = get_system_prompt()
-        user_message = build_user_prompt(prompt_data)
+        # Get prompts - check if manual mode is active
+        if st.session_state.get('manual_prompts_active', False):
+            # Use manual prompts
+            system_message = st.session_state.manual_system_prompt
+            
+            # Build user message from template by replacing placeholders
+            user_message = st.session_state.manual_user_prompt_template
+            
+            # Simple placeholder replacement (you can make this more sophisticated)
+            user_message = user_message.replace("{semester_start}", str(prompt_data['semester_start']))
+            user_message = user_message.replace("{semester_end}", str(prompt_data['semester_end']))
+            user_message = user_message.replace("{leistungsnachweise}", json.dumps(prompt_data['leistungsnachweise'], indent=2, ensure_ascii=False))
+            user_message = user_message.replace("{preferences}", json.dumps(prompt_data['preferences'], indent=2, ensure_ascii=False))
+            user_message = user_message.replace("{free_slots}", json.dumps(
+                [{
+                    'date': str(slot['date']),
+                    'day': slot['day'],
+                    'start_time': str(slot['start_time']),
+                    'end_time': str(slot['end_time'])
+                } for slot in prompt_data['free_slots']],
+                indent=2,
+                ensure_ascii=False
+            ))
+        else:
+            # Use prompts from selected version
+            system_message = get_system_prompt()
+            user_message = build_user_prompt(prompt_data)
         
-        # Call OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ],
-            temperature=0.7,
-            max_tokens=16000  # Erhöht für längere Pläne
-        )
+        # Get model configuration
+        model_provider = st.session_state.get("model_provider", "OpenAI")
+        model_name = st.session_state.get("model_name", "gpt-4o-mini")
         
-        # Extract response content
-        response_content = response.choices[0].message.content.strip()
+        # Call appropriate API based on provider
+        if model_provider == "OpenAI":
+            # Initialize OpenAI client
+            client = OpenAI(api_key=st.session_state.openai_key)
+            
+            # Call OpenAI API
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.7,
+                max_tokens=16000
+            )
+            
+            # Extract response content
+            response_content = response.choices[0].message.content.strip()
+        
+        else:  # Google Gemini
+            # Configure Gemini API
+            genai.configure(api_key=st.session_state.openai_key)
+            model = genai.GenerativeModel(model_name)
+            
+            # Combine system and user prompts for Gemini
+            combined_prompt = f"{system_message}\n\n{user_message}"
+            
+            # Call Gemini API
+            response = model.generate_content(
+                combined_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=16000,
+                )
+            )
+            
+            # Extract response content
+            response_content = response.text.strip()
         
         # Try to parse as JSON
         try:
@@ -362,29 +413,210 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # TEST-MODUS Button
-    st.sidebar.subheader("🧪 Test-Modus")
-    st.sidebar.markdown("Lade vordefinierte Test-Daten eines BWL-Studenten:")
+    # MODEL SELECTION
+    st.sidebar.subheader("🤖 Modell Konfiguration")
     
-    # Prompt-Version Auswahl
-    selected_version = st.sidebar.selectbox(
-        "Prompt-Version:",
-        options=list(AVAILABLE_VERSIONS.keys()),
-        format_func=lambda x: AVAILABLE_VERSIONS[x],
-        index=list(AVAILABLE_VERSIONS.keys()).index(ACTIVE_PROMPT_VERSION),
-        key="prompt_version_selector"
+    model_provider = st.sidebar.selectbox(
+        "LLM Provider",
+        options=["OpenAI", "Google Gemini"],
+        index=0,
+        key="model_provider_selector"
     )
     
-    # Version in Session State speichern
-    if 'selected_prompt_version' not in st.session_state:
-        st.session_state.selected_prompt_version = ACTIVE_PROMPT_VERSION
+    api_key = st.sidebar.text_input(
+        f"{model_provider} API Key",
+        type="password",
+        help=f"Gib deinen {model_provider} API Key ein",
+        key="api_key_input"
+    )
     
-    if selected_version != st.session_state.selected_prompt_version:
-        st.session_state.selected_prompt_version = selected_version
-        # Prompts neu laden
-        from prompt_config import set_active_version
-        set_active_version(selected_version)
-        st.sidebar.success(f"✅ Gewechselt zu: {AVAILABLE_VERSIONS[selected_version]}")
+    # Update openai_key in session state for compatibility
+    if api_key:
+        st.session_state.openai_key = api_key
+    
+    if model_provider == "OpenAI":
+        model_name = st.sidebar.selectbox(
+            "Modell",
+            options=["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
+            index=0,
+            key="openai_model_selector"
+        )
+    else:  # Gemini
+        model_name = st.sidebar.selectbox(
+            "Modell",
+            options=["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"],
+            index=0,
+            key="gemini_model_selector"
+        )
+    
+    # Store in session state
+    st.session_state.model_provider = model_provider
+    st.session_state.model_name = model_name
+    
+    st.sidebar.markdown("---")
+    
+    # PROMPT-VERSION AUSWAHL
+    st.sidebar.subheader("⚙️ Prompt Konfiguration")
+    
+    # Toggle zwischen Vorlagen und Manuell
+    prompt_mode = st.sidebar.radio(
+        "Modus",
+        options=["Vorlagen", "Manuell"],
+        horizontal=True,
+        help="Vorlagen: Vordefinierte Prompt-Versionen | Manuell: Eigene Prompts schreiben"
+    )
+    
+    if prompt_mode == "Vorlagen":
+        selected_version = st.sidebar.selectbox(
+            "Prompt-Version",
+            options=list(AVAILABLE_VERSIONS.keys()),
+            format_func=lambda x: AVAILABLE_VERSIONS[x],
+            index=list(AVAILABLE_VERSIONS.keys()).index(ACTIVE_PROMPT_VERSION),
+            key="prompt_version_selector",
+            help="Wähle die Prompt-Engineering-Strategie für die KI"
+        )
+        
+        # Version in Session State speichern
+        if 'selected_prompt_version' not in st.session_state:
+            st.session_state.selected_prompt_version = ACTIVE_PROMPT_VERSION
+        
+        if selected_version != st.session_state.selected_prompt_version:
+            st.session_state.selected_prompt_version = selected_version
+            # Prompts neu laden
+            from prompt_config import set_active_version
+            set_active_version(selected_version)
+            st.sidebar.success(f"✅ Gewechselt zu: {AVAILABLE_VERSIONS[selected_version]}")
+        
+        # Manual prompts zurücksetzen
+        if 'manual_prompts_active' in st.session_state:
+            del st.session_state.manual_prompts_active
+    
+    else:  # Manueller Modus
+        st.sidebar.info("🖊️ **Experimentier-Modus**: Schreibe eigene Prompts ohne Code!")
+        
+        # Expander für manuelle Prompt-Bearbeitung
+        with st.sidebar.expander("✏️ Prompts bearbeiten", expanded=True):
+            # Initialisiere mit Vorlage falls noch nicht gesetzt
+            if 'manual_system_prompt' not in st.session_state:
+                st.session_state.manual_system_prompt = get_system_prompt()
+            
+            # System Prompt Editor
+            st.markdown("**System Prompt:**")
+            manual_system = st.text_area(
+                "System Prompt",
+                value=st.session_state.manual_system_prompt,
+                height=200,
+                key="system_prompt_editor",
+                label_visibility="collapsed",
+                help="Definiert die Rolle und Regeln für die KI"
+            )
+            
+            # User Prompt Template Editor
+            st.markdown("**User Prompt Template:**")
+            st.caption("Platzhalter: {semester_start}, {semester_end}, {leistungsnachweise}, {preferences}, {free_slots}")
+            
+            if 'manual_user_prompt_template' not in st.session_state:
+                # Baue Standard-Template
+                sample_data = {
+                    'semester_start': date.today(),
+                    'semester_end': date.today() + timedelta(days=90),
+                    'leistungsnachweise': [],
+                    'preferences': {},
+                    'free_slots': []
+                }
+                st.session_state.manual_user_prompt_template = build_user_prompt(sample_data)
+            
+            manual_user_template = st.text_area(
+                "User Prompt Template",
+                value=st.session_state.manual_user_prompt_template,
+                height=250,
+                key="user_prompt_editor",
+                label_visibility="collapsed",
+                help="Template für User-Prompt (wird mit Daten gefüllt)"
+            )
+            
+            # Speichern Button
+            if st.button("💾 Prompts übernehmen", use_container_width=True, type="primary"):
+                st.session_state.manual_system_prompt = manual_system
+                st.session_state.manual_user_prompt_template = manual_user_template
+                st.session_state.manual_prompts_active = True
+                st.success("✅ Manuelle Prompts gespeichert!")
+                st.rerun()
+            
+            # Reset Button
+            if st.button("🔄 Auf Vorlage zurücksetzen", use_container_width=True):
+                st.session_state.manual_system_prompt = get_system_prompt()
+                sample_data = {
+                    'semester_start': date.today(),
+                    'semester_end': date.today() + timedelta(days=90),
+                    'leistungsnachweise': [],
+                    'preferences': {},
+                    'free_slots': []
+                }
+                st.session_state.manual_user_prompt_template = build_user_prompt(sample_data)
+                if 'manual_prompts_active' in st.session_state:
+                    del st.session_state.manual_prompts_active
+                st.success("✅ Zurückgesetzt!")
+                st.rerun()
+        
+        # Export/Import Buttons
+        col1, col2 = st.sidebar.columns(2)
+        
+        with col1:
+            # Export Button
+            if st.session_state.get('manual_prompts_active', False):
+                prompt_export = {
+                    "system_prompt": st.session_state.manual_system_prompt,
+                    "user_prompt_template": st.session_state.manual_user_prompt_template,
+                    "version": "manual",
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                st.download_button(
+                    label="📥 Export",
+                    data=json.dumps(prompt_export, indent=2, ensure_ascii=False),
+                    file_name=f"prompt_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    use_container_width=True,
+                    help="Speichere deine Prompts als JSON-Datei"
+                )
+        
+        with col2:
+            # Import Button
+            uploaded_prompt = st.file_uploader(
+                "Import",
+                type=["json"],
+                key="prompt_import",
+                label_visibility="collapsed",
+                help="Lade gespeicherte Prompts"
+            )
+            
+            if uploaded_prompt is not None:
+                try:
+                    imported_data = json.load(uploaded_prompt)
+                    st.session_state.manual_system_prompt = imported_data.get("system_prompt", "")
+                    st.session_state.manual_user_prompt_template = imported_data.get("user_prompt_template", "")
+                    st.session_state.manual_prompts_active = True
+                    st.success("✅ Prompts importiert!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Fehler beim Import: {str(e)}")
+    
+    st.sidebar.markdown("---")
+    
+    # TEST-MODUS
+    st.sidebar.subheader("🧪 Test-Modus")
+    
+    with st.sidebar.expander("ℹ️ Was ist das?", expanded=False):
+        st.markdown("""
+        **Test-Daten** bieten ein vordefiniertes Profil eines BWL-Studenten:
+        
+        - 5 Leistungsnachweise
+        - Vorlesungszeiten & Nebenjob
+        - Abwesenheiten & Präferenzen
+        
+        Perfekt zum Testen der App!
+        """)
     
     if st.sidebar.button("📋 Test-Daten laden", type="primary", use_container_width=True):
         load_test_data_into_session_state(st)
@@ -433,9 +665,17 @@ def show_setup_page():
     st.markdown("Füge alle Prüfungen, Hausarbeiten, Projekte oder Präsentationen hinzu, die du in diesem Semester abschliessen musst.")
     
     # Form to add new Leistungsnachweis
+    # Typ-Auswahl AUSSERHALB des Formulars für dynamische UI
+    st.markdown("**Neuen Leistungsnachweis hinzufügen:**")
+    
+    ln_type_preview = st.selectbox(
+        "Typ",
+        ["Prüfung", "Hausarbeit", "Präsentation", "Projektarbeit", "Sonstiges"],
+        help="Art des Leistungsnachweises",
+        key="ln_type_preview"
+    )
+    
     with st.form("add_leistungsnachweis_form", clear_on_submit=True):
-        st.markdown("**Neuen Leistungsnachweis hinzufügen:**")
-        
         col1, col2 = st.columns([2, 1])
         
         with col1:
@@ -446,11 +686,8 @@ def show_setup_page():
             )
         
         with col2:
-            ln_type = st.selectbox(
-                "Typ",
-                ["Prüfung", "Hausarbeit", "Präsentation", "Projektarbeit", "Sonstiges"],
-                help="Art des Leistungsnachweises"
-            )
+            st.markdown("**Typ:** " + ln_type_preview)
+            ln_type = ln_type_preview  # Use the preview value
         
         col3, col4 = st.columns([2, 2])
         
@@ -475,6 +712,30 @@ def show_setup_page():
             help="Liste die Hauptthemen oder Aufgaben für diesen Leistungsnachweis auf (eines pro Zeile)",
             height=100
         )
+        
+        # Prüfungsformat-Felder innerhalb des Formulars
+        # (werden nur angezeigt wenn Typ außerhalb als "Prüfung" gewählt wurde)
+        ln_exam_format = None
+        ln_exam_details = None
+        
+        if ln_type_preview == "Prüfung":
+            st.markdown("**📋 Prüfungsdetails**")
+            col_format, col_details = st.columns([1, 2])
+            
+            with col_format:
+                ln_exam_format = st.selectbox(
+                    "Prüfungsformat",
+                    ["Multiple Choice", "Rechenaufgaben", "Mündliche Prüfung", "Essay/Aufsatz", 
+                     "Praktisches Projekt (Open Book)", "Coding-Aufgabe", "Fallstudie", "Gemischt", "Sonstiges"],
+                    help="Welches Format hat die Prüfung? Wichtig für die Lernstrategie!"
+                )
+            
+            with col_details:
+                ln_exam_details = st.text_input(
+                    "Weitere Details (optional)",
+                    placeholder="z.B. '90 Min, Closed Book' oder 'Open Book, Laptop erlaubt'",
+                    help="Weitere Details wie Dauer, erlaubte Hilfsmittel, Anzahl Fragen etc."
+                )
         
         col5, col6 = st.columns(2)
         
@@ -511,7 +772,9 @@ def show_setup_page():
                     "module": ln_module if ln_module.strip() else None,
                     "topics": topics_list,
                     "priority": ln_priority,
-                    "effort": ln_effort
+                    "effort": ln_effort,
+                    "exam_format": ln_exam_format,
+                    "exam_details": ln_exam_details if ln_exam_details.strip() else None
                 }
                 
                 # Add to session state
@@ -542,6 +805,13 @@ def show_setup_page():
                     if ln.get('module'):
                         st.write(f"📚 **Zugehöriges Modul:** {ln['module']}")
                     
+                    # Prüfungsformat nur bei Typ "Prüfung" anzeigen
+                    if ln.get('type') == 'Prüfung' and ln.get('exam_format'):
+                        exam_info = f"📋 **Prüfungsformat:** {ln['exam_format']}"
+                        if ln.get('exam_details'):
+                            exam_info += f" - {ln['exam_details']}"
+                        st.write(exam_info)
+                    
                     if ln['topics']:
                         st.write(f"📝 **Themen ({len(ln['topics'])}):**")
                         for topic in ln['topics']:
@@ -563,15 +833,15 @@ def show_setup_page():
     st.markdown("---")
     
     # ========== SECTION 3: API KEY ==========
-    st.subheader("3️⃣ OpenAI API-Konfiguration")
-    st.markdown("Gib deinen OpenAI API-Schlüssel ein, um die KI-gestützte Lernplan-Generierung zu aktivieren.")
+    st.subheader("3️⃣ LLM API-Konfiguration")
+    st.markdown("Gib deinen API-Schlüssel ein, um die KI-gestützte Lernplan-Generierung zu aktivieren. Du kannst zwischen **OpenAI** (GPT-4, GPT-3.5) und **Google Gemini** wählen.")
     
     api_key = st.text_input(
-        "OpenAI API-Schlüssel",
+        "API-Schlüssel (OpenAI oder Gemini)",
         value=st.session_state.openai_key,
         type="password",
-        placeholder="sk-...",
-        help="Dein API-Schlüssel wird sicher in der Sitzung gespeichert und nie angezeigt"
+        placeholder="sk-... (OpenAI) oder AIza... (Gemini)",
+        help="Dein API-Schlüssel wird sicher in der Sitzung gespeichert und nie angezeigt. Wähle den LLM-Provider in der Sidebar."
     )
     st.session_state.openai_key = api_key
     
@@ -873,8 +1143,6 @@ def show_setup_page():
     
     st.session_state.preferences["preferred_times_of_day"] = preferred_times_of_day
     
-    st.success("✅ Lernpräferenzen gespeichert")
-    
     # Detailed explanations expander
     with st.expander("ℹ️ Was bedeuten diese Lernstrategien?"):
         st.markdown("""
@@ -1057,7 +1325,7 @@ def show_setup_page():
         if num_leistungsnachweise == 0:
             st.write("• Füge mindestens einen Leistungsnachweis hinzu")
         if not has_api_key:
-            st.write("• Gib deinen OpenAI API-Schlüssel ein")
+            st.write("• Gib deinen API-Schlüssel ein (OpenAI oder Gemini in der Sidebar wählbar)")
         if st.session_state.study_end is None:
             st.write("• Füge mindestens einen Leistungsnachweis mit Fälligkeitsdatum hinzu")
 
@@ -1083,7 +1351,7 @@ def show_plan_page():
         
         Bitte vervollständige zuerst die Einrichtungs-Seite:
         - Füge mindestens einen Leistungsnachweis hinzu
-        - Gib deinen OpenAI API-Schlüssel ein
+        - Gib deinen API-Schlüssel ein (OpenAI oder Gemini)
         - Setze gültige Semester-Daten
         """)
         return

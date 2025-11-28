@@ -24,6 +24,16 @@ ANFORDERUNGEN:
 • Vermeide Überlastung: nicht mehr als 2–3 konzentrierte Einheiten pro Tag
 • Inhalt PRO Eintrag: ein klarer Lernsprint mit spezifischem Auftrag
 
+PRÜFUNGSFORMAT-STRATEGIE:
+• Multiple Choice: Fokus auf Definitionen auswendig lernen, Karteikarten, Wiederholung
+• Rechenaufgaben: Fokus auf Übungsaufgaben rechnen, Lösungswege verstehen, Formeln anwenden
+• Mündliche Prüfung: Fokus auf freies Erklären üben, Konzepte verstehen, Beispiele parat haben
+• Essay/Aufsatz: Fokus auf Argumentation aufbauen, kritisch denken, Quellen verwenden
+• Praktisches Projekt (Open Book): Fokus auf praktisches Üben (z.B. SPSS, Coding), Tool-Kenntnisse
+• Coding-Aufgabe: Fokus auf Code schreiben, debuggen, Algorithmen implementieren
+• Fallstudie: Fokus auf Analyse, Problemlösung, Theorie anwenden
+• Gemischt: Kombination der relevanten Strategien
+
 OUTPUT:
 • Nur JSON-Array
 • Keine zusätzlichen Kommentare oder Erklärungen
@@ -78,6 +88,12 @@ SEMESTERZEITRAUM:
 {semester_start.isoformat()} bis {semester_end.isoformat()}
 
 LEISTUNGSNACHWEISE (Deadlines / Prüfungen / Workload):
+Jeder Leistungsnachweis enthält:
+- title, type, deadline, module, topics, priority, effort
+- exam_format (nur bei Prüfungen): z.B. "Multiple Choice", "Rechenaufgaben", "Mündliche Prüfung" etc.
+- exam_details (nur bei Prüfungen): z.B. "90 Min, Closed Book" oder "Open Book, Laptop erlaubt"
+
+Passe die Lernstrategie an exam_format an!
 {json.dumps(ln_serializable, ensure_ascii=False, indent=2)}
 
 VERFÜGBARE STUDY-SLOTS:

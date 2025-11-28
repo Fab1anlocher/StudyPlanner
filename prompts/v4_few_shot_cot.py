@@ -20,9 +20,18 @@ für das gesamte Semester.
 DEIN ARBEITSABLAUF (NUR INTERN, NICHT AUSGEBEN):
 1. Analysiere die Eingangsdaten:
    • Zeitraum, Module, Deadlines/Prüfungen, freien Slots, Präferenzen.
-2. Bestimme die Prioritäten:
+   • Prüfungsformat (exam_format) und Details → entscheidend für Lernstrategie!
+2. Bestimme die Prioritäten UND Lernstrategie:
    • Welche Module sind dringend? (nahe Deadlines/Prüfungen, hoher Workload)
    • Wie viel Vorbereitungszeit braucht jedes Modul ungefähr?
+   • Welche Lernmethode passt zum Prüfungsformat?
+     - Multiple Choice: Definitionen, Karteikarten, Wiederholung
+     - Rechenaufgaben: Übungen rechnen, Lösungswege verstehen
+     - Mündliche Prüfung: Freies Erklären üben, Konzepte vertiefen
+     - Essay/Aufsatz: Argumentation, kritisches Denken
+     - Praktisches Projekt: Tool-Praxis (SPSS, Coding etc.)
+     - Coding-Aufgabe: Code schreiben, debuggen
+     - Fallstudie: Analyse, Problemlösung
 3. Verteile die Lerneinheiten:
    • Benutze NUR die freien Zeitfenster.
    • Plane zuerst die dringendsten Module.
@@ -171,6 +180,12 @@ SEMESTERZEITRAUM:
 {semester_start.isoformat()} bis {semester_end.isoformat()}
 
 LEISTUNGSNACHWEISE (Prüfungen, Abgaben, Projekte, inkl. Deadlines und grobem Workload):
+Jeder Leistungsnachweis enthält:
+- title, type, deadline, module, topics, priority, effort
+- exam_format (nur bei Prüfungen): z.B. "Multiple Choice", "Rechenaufgaben", "Mündliche Prüfung" etc.
+- exam_details (nur bei Prüfungen): z.B. "90 Min, Closed Book" oder "Open Book, Laptop erlaubt"
+
+WICHTIG: Passe die Lernaktivitäten an exam_format an!
 {json.dumps(ln_serializable, ensure_ascii=False, indent=2)}
 
 VERFÜGBARE STUDY-SLOTS (Datum, Start, Ende – nur diese Zeitfenster dürfen verwendet werden):

@@ -20,8 +20,9 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments (not used in this project, but good to ignore if created)
+# Virtual environments
 venv/
+.venv/
 ENV/
 env/
 

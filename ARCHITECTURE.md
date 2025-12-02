@@ -517,6 +517,61 @@ def get_plan_statistics(
 
 ## 🔄 Data Flow
 
+### LLM Input Verification Table
+
+The following table documents all UI inputs and verifies their flow to the LLM:
+
+| UI Input | Session State Key | Passed to LLM? | File/Function | Notes |
+|----------|------------------|----------------|---------------|-------|
+| **Semester Start** | `study_start` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | ISO format as string |
+| **Semester End** | `study_end` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | Auto-calculated from max deadline |
+| **Leistungsnachweise** | `leistungsnachweise` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | Full list with all fields |
+| ↳ Title | `leistungsnachweise[].title` | ✅ Ja | JSON serialized | - |
+| ↳ Type | `leistungsnachweise[].type` | ✅ Ja | JSON serialized | Enum value |
+| ↳ Deadline | `leistungsnachweise[].deadline` | ✅ Ja | JSON serialized | ISO date |
+| ↳ Module | `leistungsnachweise[].module` | ✅ Ja | JSON serialized | - |
+| ↳ Topics | `leistungsnachweise[].topics` | ✅ Ja | JSON serialized | Array of strings |
+| ↳ Priority | `leistungsnachweise[].priority` | ✅ Ja | JSON serialized | 1-5 scale |
+| ↳ Effort | `leistungsnachweise[].effort` | ✅ Ja | JSON serialized | 1-5 scale |
+| ↳ Exam Format | `leistungsnachweise[].exam_format` | ✅ Ja | JSON serialized | Enum value |
+| ↳ Exam Details | `leistungsnachweise[].exam_details` | ✅ Ja | JSON serialized | Free text |
+| **Busy Times** | `busy_times` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | Weekly recurring |
+| ↳ Label | `busy_times[].label` | ✅ Ja | JSON serialized | e.g. "Vorlesung" |
+| ↳ Days | `busy_times[].days` | ✅ Ja | JSON serialized | German weekday names |
+| ↳ Start/End | `busy_times[].start/end` | ✅ Ja | JSON serialized | HH:MM format |
+| **Absences** | `absences` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | Date ranges |
+| ↳ Label | `absences[].label` | ✅ Ja | JSON serialized | e.g. "Urlaub" |
+| ↳ Start/End Date | `absences[].start_date/end_date` | ✅ Ja | JSON serialized | ISO date |
+| **Free Slots** | `free_slots` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | Calculated slots |
+| ↳ Date | `free_slots[].date` | ✅ Ja | JSON serialized | ISO date |
+| ↳ Start/End | `free_slots[].start/end` | ✅ Ja | JSON serialized | HH:MM format |
+| ↳ Hours | `free_slots[].hours` | ✅ Ja | JSON serialized | Duration |
+| **Preferences** | `preferences` | ✅ Ja | `prompts/v*.py` → `build_user_prompt()` | All user settings |
+| ↳ Spacing | `preferences.spacing` | ✅ Ja | JSON serialized | Spaced repetition |
+| ↳ Interleaving | `preferences.interleaving` | ✅ Ja | JSON serialized | Mix subjects |
+| ↳ Deep Work | `preferences.deep_work` | ✅ Ja | JSON serialized | Long focus blocks |
+| ↳ Short Sessions | `preferences.short_sessions` | ✅ Ja | JSON serialized | Short sessions |
+| ↳ Rest Days | `preferences.rest_days` | ✅ Ja | JSON serialized | German day names |
+| ↳ Max Hours/Day | `preferences.max_hours_day` | ✅ Ja | JSON serialized | Hard limit |
+| ↳ Max Hours/Week | `preferences.max_hours_week` | ✅ Ja | JSON serialized | Hard limit |
+| ↳ Min Session Duration | `preferences.min_session_duration` | ✅ Ja | JSON serialized | In minutes |
+| ↳ Preferred Times | `preferences.preferred_times_of_day` | ✅ Ja | JSON serialized | morning/afternoon/evening |
+
+**Data Flow Path:**
+
+```
+setup_page.py → st.session_state → app.py:generate_plan_via_ai() 
+    → prompts/v*.py:build_user_prompt() → LLM API
+```
+
+**Key Implementation Points:**
+
+1. **`app.py:generate_plan_via_ai()`** (lines 90-100) prepares `prompt_data` dict with all inputs
+2. **`prompts/v*.py:build_user_prompt()`** serializes all data to JSON strings
+3. Date objects are converted to ISO format strings
+4. Enums are converted to their string values
+5. Free slots are pre-calculated by `planning_service.py` before LLM call
+
 ### Complete User Journey
 
 ```

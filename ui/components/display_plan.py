@@ -104,14 +104,15 @@ def display_weekly_view(sorted_plan):
 
     # Pre-compute busy times grouped by weekday index (0=Monday, 6=Sunday)
     # This avoids recomputing for every week since busy times are recurring
-    weekday_names_en = [
-        "monday", "tuesday", "wednesday", "thursday",
-        "friday", "saturday", "sunday"
+    # Note: busy times use German weekday names from the UI
+    weekday_names_de = [
+        "montag", "dienstag", "mittwoch", "donnerstag",
+        "freitag", "samstag", "sonntag"
     ]
     busy_times_by_weekday = {i: [] for i in range(7)}
     for busy in busy_times:
         busy_days_lower = {d.lower() for d in busy.get("days", [])}
-        for day_idx, weekday_name in enumerate(weekday_names_en):
+        for day_idx, weekday_name in enumerate(weekday_names_de):
             if weekday_name in busy_days_lower:
                 busy_times_by_weekday[day_idx].append({
                     "label": busy.get("label", "Belegt"),

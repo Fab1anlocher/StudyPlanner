@@ -1,6 +1,6 @@
 """
 Application settings and configuration
-Kann später für Environment-spezifische Configs erweitert werden
+Zentralisiert alle App-weiten Einstellungen und konfigurierbare Parameter
 """
 
 import os
@@ -13,29 +13,60 @@ class Settings:
     Kann später mit pydantic-settings oder python-decouple erweitert werden
     """
 
-    # App Metadata
+    # ════════════════════════════════════════════════════════════════
+    # APP METADATA
+    # ════════════════════════════════════════════════════════════════
     APP_NAME = "KI-Lernplaner für Studierende"
     APP_ICON = "📚"
     VERSION = "1.0.0"
 
-    # Streamlit Config
+    # ════════════════════════════════════════════════════════════════
+    # STREAMLIT CONFIG
+    # ════════════════════════════════════════════════════════════════
     PAGE_TITLE = "KI-Lernplaner"
     PAGE_ICON = "📚"
     LAYOUT = "wide"
     INITIAL_SIDEBAR_STATE = "expanded"
 
-    # LLM Settings
+    # ════════════════════════════════════════════════════════════════
+    # LLM SETTINGS
+    # ════════════════════════════════════════════════════════════════
     LLM_TEMPERATURE = 0.7
     LLM_MAX_TOKENS = 16000
+    LLM_RETRY_ATTEMPTS = 3
+    LLM_RETRY_DELAY = 1.0  # Sekunden, mit exponentiellem Backoff
 
-    # File paths (relativ zum Projekt-Root)
+    # ════════════════════════════════════════════════════════════════
+    # PLANNING DEFAULTS
+    # ════════════════════════════════════════════════════════════════
+    DEFAULT_MAX_HOURS_PER_DAY = 8
+    DEFAULT_MAX_HOURS_PER_WEEK = 40
+    DEFAULT_MIN_SESSION_DURATION = 60  # Minuten
+    DEFAULT_EARLIEST_STUDY_TIME = "08:00"
+    DEFAULT_LATEST_STUDY_TIME = "20:00"
+    MIN_FREE_SLOT_DURATION = 0.25  # Stunden (15 Minuten)
+
+    # ════════════════════════════════════════════════════════════════
+    # UI DISPLAY SETTINGS
+    # ════════════════════════════════════════════════════════════════
+    MAX_TOPIC_DISPLAY_LENGTH = 25
+    MAX_MODULE_DISPLAY_LENGTH = 20
+    MAX_LABEL_DISPLAY_LENGTH = 20
+
+    # ════════════════════════════════════════════════════════════════
+    # FILE PATHS
+    # ════════════════════════════════════════════════════════════════
     PROMPT_TEMPLATES_DIR = "data/prompt_templates"
     PROMPTS_DIR = "prompts"
 
-    # Development
+    # ════════════════════════════════════════════════════════════════
+    # DEVELOPMENT
+    # ════════════════════════════════════════════════════════════════
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-    # Database (für später)
+    # ════════════════════════════════════════════════════════════════
+    # DATABASE (für spätere Erweiterung)
+    # ════════════════════════════════════════════════════════════════
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
 
     @classmethod

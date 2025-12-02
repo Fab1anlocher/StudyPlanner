@@ -424,7 +424,7 @@ def display_list_view(sorted_plan):
             col1, col2 = st.columns([1, 4])
 
             with col1:
-                st.markdown(f"**{start} – {end}**")
+                st.markdown(f"**{start} - {end}**")
 
             with col2:
                 st.markdown(f"**{module}**")

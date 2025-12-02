@@ -170,16 +170,21 @@ def _convert_busy_times(busy_times: List[Dict[str, Any]]) -> List[Dict[str, Any]
     """
     Konvertiert busy_times von Session-Format zu Planning-Format
 
-    Session Format: {"label": str, "days": [weekdays], "start": "HH:MM", "end": "HH:MM"}
-    Planning Format: {"day": weekday_en, "start": time, "end": time, "label": str}
+    Session Format: {"label": str, "days": [weekdays], "start": "HH:MM", "end": "HH:MM", 
+                     "valid_from": date (optional), "valid_until": date (optional)}
+    Planning Format: {"day": weekday_en, "start": time, "end": time, "label": str,
+                      "valid_from": date, "valid_until": date}
 
     Returns:
-        List of converted busy times (one entry per day with label)
+        List of converted busy times (one entry per day with label and validity)
     """
     converted = []
 
     for busy in busy_times:
         label = busy.get("label", "Verpflichtung")
+        valid_from = busy.get("valid_from")  # date or None
+        valid_until = busy.get("valid_until")  # date or None
+        
         for day in busy.get("days", []):
             # Convert German day name to English lowercase
             english_day = convert_weekday_de_to_en(day)
@@ -190,6 +195,8 @@ def _convert_busy_times(busy_times: List[Dict[str, Any]]) -> List[Dict[str, Any]
                     "start": datetime.strptime(busy["start"], TIME_FORMAT).time(),
                     "end": datetime.strptime(busy["end"], TIME_FORMAT).time(),
                     "label": label,
+                    "valid_from": valid_from,
+                    "valid_until": valid_until,
                 }
             )
 

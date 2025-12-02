@@ -38,7 +38,7 @@ def get_fabian_test_data():
 
     # Semester-Zeitraum
     study_start = date(2025, 12, 2)
-    study_end = date(2026, 1, 14)  # Ende basierend auf letzter Prüfung
+    study_end = date(2026, 1, 22)  # Ende basierend auf letzter Prüfung (Rechnungswesen)
 
     # ==========================================
     # LEISTUNGSNACHWEISE (5 Prüfungen/Arbeiten)
@@ -150,43 +150,56 @@ def get_fabian_test_data():
     # ==========================================
     # BELEGTE ZEITEN (Arbeit, Vorlesungen, Fussball)
     # ==========================================
-    # Format: Wiederkehrende wöchentliche Termine
+    # Format: Wiederkehrende wöchentliche Termine mit Gültigkeitszeitraum
+    # Vorlesungen enden Mitte Dezember, danach ist mehr Zeit zum Lernen!
     busy_times = [
         {
             "label": "Arbeit (Teilzeit-Job)",
             "days": ["Montag", "Dienstag"],
             "start": "09:00",
             "end": "17:00",
+            "valid_from": date(2025, 12, 2),
+            "valid_until": None,  # Durchgehend
         },
         {
             "label": "Fussballtraining",
             "days": ["Montag", "Mittwoch"],
             "start": "18:30",
             "end": "20:30",
+            "valid_from": date(2025, 12, 2),
+            "valid_until": None,  # Durchgehend
         },
         {
             "label": "Vorlesungen (Marketing, VWL)",
             "days": ["Mittwoch"],
             "start": "08:00",
             "end": "12:00",
+            "valid_from": date(2025, 12, 2),
+            "valid_until": date(2025, 12, 18),  # Vorlesungen enden vor Weihnachten
         },
         {
             "label": "Vorlesungen (Rechnungswesen, Statistik)",
             "days": ["Donnerstag"],
             "start": "08:00",
             "end": "13:00",
+            "valid_from": date(2025, 12, 2),
+            "valid_until": date(2025, 12, 18),  # Vorlesungen enden vor Weihnachten
         },
         {
             "label": "Vorlesung (Unternehmensführung)",
             "days": ["Freitag"],
             "start": "09:00",
             "end": "12:00",
+            "valid_from": date(2025, 12, 2),
+            "valid_until": date(2025, 12, 19),  # Letzte Vorlesung
         },
         {
             "label": "Freunde treffen / Sport",
             "days": ["Samstag"],
             "start": "10:00",
             "end": "13:00",
+            "valid_from": date(2025, 12, 2),
+            "valid_until": None,  # Durchgehend
         },
     ]
 
@@ -357,30 +370,39 @@ def get_lena_test_data():
     # ==========================================
     # BELEGTE ZEITEN (Vorlesungen, Nebenjob)
     # ==========================================
+    # Vorlesungen enden Mitte Juni, aber Prüfungen sind bis Ende Juli
     busy_times = [
         {
             "label": "Vorlesungen (Datenbanken, Algorithmen)",
             "days": ["Montag", "Mittwoch"],
             "start": "08:00",
             "end": "14:00",
+            "valid_from": date(2025, 5, 1),
+            "valid_until": date(2025, 6, 20),  # Vorlesungen enden vor Prüfungsphase
         },
         {
             "label": "Vorlesungen (Software Engineering)",
             "days": ["Dienstag"],
             "start": "08:00",
             "end": "12:00",
+            "valid_from": date(2025, 5, 1),
+            "valid_until": date(2025, 6, 20),  # Vorlesungen enden vor Prüfungsphase
         },
         {
             "label": "Vorlesungen (Webentwicklung, Betriebssysteme)",
             "days": ["Donnerstag", "Freitag"],
             "start": "08:00",
             "end": "14:00",
+            "valid_from": date(2025, 5, 1),
+            "valid_until": date(2025, 6, 20),  # Vorlesungen enden vor Prüfungsphase
         },
         {
             "label": "Nebenjob IT-Support",
             "days": ["Samstag"],
             "start": "10:00",
             "end": "16:00",
+            "valid_from": date(2025, 5, 1),
+            "valid_until": None,  # Durchgehend
         },
     ]
 

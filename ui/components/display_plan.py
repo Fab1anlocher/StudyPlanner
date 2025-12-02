@@ -103,7 +103,7 @@ def display_weekly_view(sorted_plan):
     absences = st.session_state.get("absences", [])
 
     # Pre-compute busy times grouped by weekday index (0=Monday, 6=Sunday)
-    # This avoids recomputing for every week since busy times are recurring
+    # Now including validity period for filtering per-date
     # Note: busy times use German weekday names from the UI
     weekday_names_de = [
         "montag", "dienstag", "mittwoch", "donnerstag",
@@ -118,6 +118,8 @@ def display_weekly_view(sorted_plan):
                     "label": busy.get("label", "Belegt"),
                     "start": busy.get("start", ""),
                     "end": busy.get("end", ""),
+                    "valid_from": busy.get("valid_from"),
+                    "valid_until": busy.get("valid_until"),
                 })
 
     # Pre-compute exams/deadlines by date for O(1) lookup
@@ -252,9 +254,25 @@ def display_weekly_view(sorted_plan):
                         absence.get("label", "Abwesenheit")
                     )
 
-    # Use pre-computed busy times (already grouped by weekday)
-    # Note: Create a shallow copy to avoid potential reference issues
-    days_busy = {i: busy_times_by_weekday[i] for i in range(7)}
+    # Filter busy times by validity period for each day
+    # We need to check if the busy time is valid for the specific date
+    days_busy = {i: [] for i in range(7)}
+    for day_idx in range(7):
+        day_date = week_start + timedelta(days=day_idx)
+        for busy_item in busy_times_by_weekday[day_idx]:
+            valid_from = busy_item.get("valid_from")
+            valid_until = busy_item.get("valid_until")
+            
+            # Check if this busy time is valid for the current date
+            if valid_from is not None and day_date < valid_from:
+                # Busy time hasn't started yet
+                continue
+            if valid_until is not None and day_date > valid_until:
+                # Busy time has ended (e.g., lectures ended mid-December)
+                continue
+            
+            # Busy time is valid for this date
+            days_busy[day_idx].append(busy_item)
 
     # Check for exams/deadlines on each day using pre-computed lookup (O(1) per day)
     days_exams = {i: [] for i in range(7)}
@@ -298,7 +316,7 @@ def display_weekly_view(sorted_plan):
                         unsafe_allow_html=True,
                     )
 
-            # Show busy times (job, lectures, etc.)
+            # Show busy times (job, lectures, etc.) - only valid ones for this date
             if busy_today:
                 for busy_item in busy_today:
                     start = busy_item.get("start", "N/A")

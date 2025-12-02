@@ -678,8 +678,6 @@ def show_setup_page():
 
     st.markdown("---")
 
-    st.markdown("---")
-
     # ========== SETUP SUMMARY ==========
     st.subheader("📋 Einrichtungs-Zusammenfassung")
     st.markdown("Überprüfe deine Konfiguration, bevor du deinen Lernplan generierst.")

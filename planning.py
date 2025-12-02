@@ -61,17 +61,20 @@ def calculate_free_slots(
                 absence_lookup.add(current_date)
                 current_date += timedelta(days=1)
 
-    # Pre-group busy times by weekday for O(1) lookup instead of O(n) per day
-    # This avoids iterating through all busy_times for each day in the semester
-    busy_times_by_day: Dict[str, List[Tuple[time, time]]] = {}
+    # Pre-group busy times by weekday for lookup
+    # Each entry now includes validity period info
+    # Format: {weekday: [(start_time, end_time, valid_from, valid_until), ...]}
+    busy_times_by_day: Dict[str, List[Tuple[time, time, Optional[date], Optional[date]]]] = {}
     for busy in busy_times:
         day = busy.get("day")
         busy_start = busy.get("start")
         busy_end = busy.get("end")
+        valid_from = busy.get("valid_from")  # date or None
+        valid_until = busy.get("valid_until")  # date or None
         if day and busy_start and busy_end:
             if day not in busy_times_by_day:
                 busy_times_by_day[day] = []
-            busy_times_by_day[day].append((busy_start, busy_end))
+            busy_times_by_day[day].append((busy_start, busy_end, valid_from, valid_until))
 
     # Convert rest_days to a set for O(1) lookup
     rest_days_set = set(rest_days)
@@ -97,9 +100,17 @@ def calculate_free_slots(
         # Start with the full day as a free slot (from earliest to latest study time)
         free_intervals = [(earliest_study_time, latest_study_time)]
 
-        # Subtract busy times for this weekday (O(1) lookup for the day's busy times)
+        # Subtract busy times for this weekday, filtering by validity period
         day_busy_times = busy_times_by_day.get(weekday_name, [])
-        for busy_start, busy_end in day_busy_times:
+        for busy_start, busy_end, valid_from, valid_until in day_busy_times:
+            # Check if this busy time is valid for the current date
+            if valid_from is not None and current_date < valid_from:
+                # Busy time hasn't started yet
+                continue
+            if valid_until is not None and current_date > valid_until:
+                # Busy time has ended (e.g., lectures ended mid-December)
+                continue
+            
             # Apply busy time to all current free intervals
             new_intervals = []
             for free_start, free_end in free_intervals:

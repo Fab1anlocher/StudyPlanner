@@ -4,6 +4,7 @@ Sammelt alle notwendigen Daten für die KI-gestützte Planung
 """
 
 import streamlit as st
+from datetime import datetime
 
 # Import constants
 from constants import (
@@ -311,6 +312,26 @@ def show_setup_page():
                 "Endzeit", value=None, help="Wann endet diese Verpflichtung?"
             )
 
+        # Validity period for the busy time
+        st.markdown("**Gültigkeitszeitraum (optional):**")
+        st.caption("Lasse leer, wenn die Verpflichtung während des gesamten Semesters gilt (z.B. Arbeit). Setze ein Enddatum für zeitlich begrenzte Verpflichtungen (z.B. Vorlesungen enden Mitte Dezember).")
+        
+        col_valid1, col_valid2 = st.columns(2)
+        with col_valid1:
+            busy_valid_from = st.date_input(
+                "Gültig ab",
+                value=st.session_state.study_start,
+                format="DD.MM.YYYY",
+                help="Ab wann gilt diese Verpflichtung? (Standard: Lernplan-Start)",
+            )
+        with col_valid2:
+            busy_valid_until = st.date_input(
+                "Gültig bis",
+                value=None,
+                format="DD.MM.YYYY",
+                help="Bis wann gilt diese Verpflichtung? Leer = bis Semester-Ende",
+            )
+
         submitted_busy = st.form_submit_button(
             "➕ Neue belegte Zeit hinzufügen", use_container_width=True
         )
@@ -323,6 +344,8 @@ def show_setup_page():
                     "days": busy_days,
                     "start": busy_start.strftime("%H:%M"),
                     "end": busy_end.strftime("%H:%M"),
+                    "valid_from": busy_valid_from,
+                    "valid_until": busy_valid_until,  # Can be None
                 }
 
                 st.session_state.busy_times.append(new_busy_time)
@@ -334,27 +357,101 @@ def show_setup_page():
                 )
 
     st.info(
-        "💡 Diese Zeiten werden bei der Berechnung deiner freien Lernfenster automatisch ausgeschlossen."
+        "💡 Diese Zeiten werden bei der Berechnung deiner freien Lernfenster automatisch ausgeschlossen. Nach dem Gültigkeitszeitraum werden sie nicht mehr blockiert."
     )
 
-    # Display existing busy times
+    # Display existing busy times with edit functionality
     if st.session_state.busy_times:
         st.markdown("**📅 Deine belegten Zeiten:**")
 
         for idx, busy in enumerate(st.session_state.busy_times):
-            col1, col2 = st.columns([4, 1])
-
-            with col1:
-                days_str = ", ".join(busy["days"])
-                st.write(
-                    f"🔸 **{busy['label']}**: {days_str} von {busy['start']} bis {busy['end']}"
-                )
-
-            with col2:
-                if st.button("🗑️", key=f"remove_busy_{idx}", use_container_width=True):
-                    st.session_state.busy_times.pop(idx)
-                    st.success("Belegte Zeit entfernt.")
-                    st.rerun()
+            days_str = ", ".join(busy["days"])
+            
+            # Build expander title with validity info
+            valid_from = busy.get("valid_from")
+            valid_until = busy.get("valid_until")
+            validity_str = ""
+            if valid_from or valid_until:
+                from_str = valid_from.strftime("%d.%m.%Y") if valid_from else "Start"
+                until_str = valid_until.strftime("%d.%m.%Y") if valid_until else "Ende"
+                validity_str = f" | Gültig: {from_str} - {until_str}"
+            
+            with st.expander(
+                f"🔸 **{busy['label']}**: {days_str}, {busy['start']}-{busy['end']}{validity_str}",
+                expanded=False
+            ):
+                # Edit form for this busy time
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    new_label = st.text_input(
+                        "Bezeichnung",
+                        value=busy["label"],
+                        key=f"edit_busy_label_{idx}",
+                    )
+                    new_days = st.multiselect(
+                        "Wochentage",
+                        WEEKDAY_NAMES_DE,
+                        default=busy["days"],
+                        key=f"edit_busy_days_{idx}",
+                    )
+                    # Get current time values or parse from string
+                    try:
+                        current_start = datetime.strptime(busy["start"], "%H:%M").time()
+                    except:
+                        current_start = None
+                    new_start = st.time_input(
+                        "Startzeit",
+                        value=current_start,
+                        key=f"edit_busy_start_{idx}",
+                    )
+                
+                with col2:
+                    try:
+                        current_end = datetime.strptime(busy["end"], "%H:%M").time()
+                    except:
+                        current_end = None
+                    new_end = st.time_input(
+                        "Endzeit",
+                        value=current_end,
+                        key=f"edit_busy_end_{idx}",
+                    )
+                    new_valid_from = st.date_input(
+                        "Gültig ab",
+                        value=busy.get("valid_from", st.session_state.study_start),
+                        format="DD.MM.YYYY",
+                        key=f"edit_busy_valid_from_{idx}",
+                    )
+                    new_valid_until = st.date_input(
+                        "Gültig bis (leer = Semester-Ende)",
+                        value=busy.get("valid_until"),
+                        format="DD.MM.YYYY",
+                        key=f"edit_busy_valid_until_{idx}",
+                    )
+                
+                col_save, col_delete = st.columns(2)
+                
+                with col_save:
+                    if st.button("💾 Speichern", key=f"save_busy_{idx}", use_container_width=True):
+                        if new_label.strip() and new_days and new_start and new_end:
+                            st.session_state.busy_times[idx] = {
+                                "label": new_label,
+                                "days": new_days,
+                                "start": new_start.strftime("%H:%M"),
+                                "end": new_end.strftime("%H:%M"),
+                                "valid_from": new_valid_from,
+                                "valid_until": new_valid_until,
+                            }
+                            st.success("Belegte Zeit aktualisiert!")
+                            st.rerun()
+                        else:
+                            st.error("Bitte alle Pflichtfelder ausfüllen.")
+                
+                with col_delete:
+                    if st.button("🗑️ Entfernen", key=f"remove_busy_{idx}", use_container_width=True, type="secondary"):
+                        st.session_state.busy_times.pop(idx)
+                        st.success("Belegte Zeit entfernt.")
+                        st.rerun()
 
         st.info(f"📊 Total belegte Zeitfenster: {len(st.session_state.busy_times)}")
     else:

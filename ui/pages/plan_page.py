@@ -273,30 +273,107 @@ Der Plan wird dennoch erstellt, aber möglicherweise nicht alle Themen abdecken.
             st.markdown(
                 "**Verwalte deine wiederkehrenden wöchentlichen Verpflichtungen.**"
             )
+            st.caption("Tipp: Setze ein Gültigkeits-Enddatum für Vorlesungen, die vor den Prüfungen enden.")
 
-            # Display existing busy times
+            # Display existing busy times with edit functionality
             if st.session_state.busy_times:
                 st.markdown("**Aktuelle belegte Zeiten:**")
 
                 for idx, busy in enumerate(st.session_state.busy_times):
-                    col1, col2 = st.columns([4, 1])
-
-                    with col1:
-                        days_str = ", ".join(busy["days"])
-                        st.write(
-                            f"• **{busy['label']}**: {days_str} von {busy['start']} bis {busy['end']}"
-                        )
-
-                    with col2:
-                        if st.button(
-                            "🗑️",
-                            key=f"remove_busy_plan_{idx}",
-                            help="Entfernen",
-                            use_container_width=True,
-                        ):
-                            st.session_state.busy_times.pop(idx)
-                            st.success("Belegte Zeit entfernt!")
-                            st.rerun()
+                    days_str = ", ".join(busy["days"])
+                    valid_from = busy.get("valid_from")
+                    valid_until = busy.get("valid_until")
+                    validity_str = ""
+                    if valid_until:
+                        validity_str = f" (bis {valid_until.strftime('%d.%m.%Y')})"
+                    
+                    with st.expander(
+                        f"• **{busy['label']}**: {days_str}, {busy['start']}-{busy['end']}{validity_str}",
+                        expanded=False
+                    ):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            edit_label = st.text_input(
+                                "Bezeichnung",
+                                value=busy["label"],
+                                key=f"plan_edit_busy_label_{idx}",
+                            )
+                            edit_days = st.multiselect(
+                                "Tage",
+                                WEEKDAY_NAMES_DE,
+                                default=busy["days"],
+                                key=f"plan_edit_busy_days_{idx}",
+                            )
+                        
+                        with col2:
+                            try:
+                                current_start = datetime.strptime(busy["start"], "%H:%M").time()
+                            except:
+                                current_start = None
+                            edit_start = st.time_input(
+                                "Startzeit",
+                                value=current_start,
+                                key=f"plan_edit_busy_start_{idx}",
+                            )
+                            try:
+                                current_end = datetime.strptime(busy["end"], "%H:%M").time()
+                            except:
+                                current_end = None
+                            edit_end = st.time_input(
+                                "Endzeit",
+                                value=current_end,
+                                key=f"plan_edit_busy_end_{idx}",
+                            )
+                        
+                        st.markdown("**Gültigkeitszeitraum:**")
+                        col_v1, col_v2 = st.columns(2)
+                        with col_v1:
+                            edit_valid_from = st.date_input(
+                                "Gültig ab",
+                                value=valid_from if valid_from else st.session_state.study_start,
+                                format="DD.MM.YYYY",
+                                key=f"plan_edit_busy_valid_from_{idx}",
+                            )
+                        with col_v2:
+                            edit_valid_until = st.date_input(
+                                "Gültig bis",
+                                value=valid_until,
+                                format="DD.MM.YYYY",
+                                key=f"plan_edit_busy_valid_until_{idx}",
+                            )
+                        
+                        col_save, col_delete = st.columns(2)
+                        with col_save:
+                            if st.button(
+                                "💾 Speichern",
+                                key=f"plan_save_busy_{idx}",
+                                use_container_width=True,
+                            ):
+                                if edit_label and edit_days and edit_start and edit_end:
+                                    st.session_state.busy_times[idx] = {
+                                        "label": edit_label,
+                                        "days": edit_days,
+                                        "start": edit_start.strftime("%H:%M"),
+                                        "end": edit_end.strftime("%H:%M"),
+                                        "valid_from": edit_valid_from,
+                                        "valid_until": edit_valid_until,
+                                    }
+                                    st.success("Belegte Zeit aktualisiert!")
+                                    st.rerun()
+                                else:
+                                    st.error("Bitte alle Pflichtfelder ausfüllen.")
+                        
+                        with col_delete:
+                            if st.button(
+                                "🗑️ Entfernen",
+                                key=f"plan_remove_busy_{idx}",
+                                use_container_width=True,
+                                type="secondary",
+                            ):
+                                st.session_state.busy_times.pop(idx)
+                                st.success("Belegte Zeit entfernt!")
+                                st.rerun()
             else:
                 st.info("Keine belegten Zeiten konfiguriert.")
 
@@ -319,6 +396,21 @@ Der Plan wird dennoch erstellt, aber möglicherweise nicht alle Themen abdecken.
                     with col2:
                         new_busy_start = st.time_input("Startzeit", value=None)
                         new_busy_end = st.time_input("Endzeit", value=None)
+                    
+                    st.markdown("**Gültigkeitszeitraum (optional):**")
+                    col_v1, col_v2 = st.columns(2)
+                    with col_v1:
+                        new_valid_from = st.date_input(
+                            "Gültig ab",
+                            value=st.session_state.study_start,
+                            format="DD.MM.YYYY",
+                        )
+                    with col_v2:
+                        new_valid_until = st.date_input(
+                            "Gültig bis (leer = Semester-Ende)",
+                            value=None,
+                            format="DD.MM.YYYY",
+                        )
 
                     if st.form_submit_button("Hinzufügen", use_container_width=True):
                         if (
@@ -333,6 +425,8 @@ Der Plan wird dennoch erstellt, aber möglicherweise nicht alle Themen abdecken.
                                     "days": new_busy_days,
                                     "start": new_busy_start.strftime("%H:%M"),
                                     "end": new_busy_end.strftime("%H:%M"),
+                                    "valid_from": new_valid_from,
+                                    "valid_until": new_valid_until,
                                 }
                             )
                             st.success("Belegte Zeit hinzugefügt!")

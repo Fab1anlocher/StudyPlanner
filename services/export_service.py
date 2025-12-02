@@ -149,7 +149,17 @@ def create_pdf_export(
             days = ", ".join(busy.get("days", []))
             start = busy.get("start", "")
             end = busy.get("end", "")
-            pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - {label}: {days}, {start}-{end}"), ln=True)
+            
+            # Add validity period info if available
+            valid_from = busy.get("valid_from")
+            valid_until = busy.get("valid_until")
+            validity_str = ""
+            if valid_until:
+                from_str = valid_from.strftime("%d.%m.%Y") if valid_from else "Start"
+                until_str = valid_until.strftime("%d.%m.%Y")
+                validity_str = f" (bis {until_str})"
+            
+            pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - {label}: {days}, {start}-{end}{validity_str}"), ln=True)
         pdf.ln(3)
 
     pdf.ln(5)
@@ -459,7 +469,7 @@ def create_excel_export(
     # Sheet 4: Verpflichtungen (Busy Times)
     ws_busy = wb.create_sheet("Verpflichtungen")
     
-    busy_headers = ["Bezeichnung", "Tage", "Start", "Ende"]
+    busy_headers = ["Bezeichnung", "Tage", "Start", "Ende", "Gültig ab", "Gültig bis"]
     for col_num, header in enumerate(busy_headers, 1):
         cell = ws_busy.cell(row=1, column=col_num, value=header)
         cell.fill = header_fill
@@ -469,20 +479,27 @@ def create_excel_export(
     
     for row_num, busy in enumerate(busy_times, 2):
         days_str = ", ".join(busy.get("days", []))
+        valid_from = busy.get("valid_from")
+        valid_until = busy.get("valid_until")
         
-        row_data = [
+        # Write basic data
+        basic_data = [
             busy.get("label", ""),
             days_str,
             busy.get("start", ""),
             busy.get("end", "")
         ]
         
-        for col_num, value in enumerate(row_data, 1):
+        for col_num, value in enumerate(basic_data, 1):
             cell = ws_busy.cell(row=row_num, column=col_num, value=value)
             cell.border = border
+        
+        # Write validity dates with proper format
+        set_date_cell(ws_busy.cell(row=row_num, column=5), valid_from)
+        set_date_cell(ws_busy.cell(row=row_num, column=6), valid_until)
     
     for col in range(1, len(busy_headers) + 1):
-        ws_busy.column_dimensions[get_column_letter(col)].width = 20
+        ws_busy.column_dimensions[get_column_letter(col)].width = 18
     
     # Sheet 5: Übersicht (Summary)
     ws_summary = wb.create_sheet("Übersicht")

@@ -140,37 +140,37 @@ def get_test_data():
     busy_times = [
         {
             "label": "Arbeit (Teilzeit-Job)",
-            "days": ["Monday", "Tuesday"],
+            "days": ["Montag", "Dienstag"],
             "start": "09:00",
             "end": "17:00",
         },
         {
             "label": "Fussballtraining",
-            "days": ["Monday", "Wednesday"],
+            "days": ["Montag", "Mittwoch"],
             "start": "18:30",
             "end": "20:30",
         },
         {
             "label": "Vorlesungen (Marketing, VWL)",
-            "days": ["Wednesday"],
+            "days": ["Mittwoch"],
             "start": "08:00",
             "end": "12:00",
         },
         {
             "label": "Vorlesungen (Rechnungswesen, Statistik)",
-            "days": ["Thursday"],
+            "days": ["Donnerstag"],
             "start": "08:00",
             "end": "13:00",
         },
         {
             "label": "Vorlesung (Unternehmensführung)",
-            "days": ["Friday"],
+            "days": ["Freitag"],
             "start": "09:00",
             "end": "12:00",
         },
         {
             "label": "Freunde treffen / Sport",
-            "days": ["Saturday"],
+            "days": ["Samstag"],
             "start": "10:00",
             "end": "13:00",
         },

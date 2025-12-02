@@ -278,7 +278,7 @@ def show_setup_page():
     st.markdown("---")
 
     # ========== SECTION 4: BUSY TIMES (RECURRING WEEKLY SCHEDULE) ==========
-    st.subheader("4️⃣ Belgete Zeiten (wöchentliche Verpflichtungen)")
+    st.subheader("4️⃣ Belegte Zeiten (wöchentliche Verpflichtungen)")
     st.markdown(
         "Definiere deine regelmässigen wöchentlichen Verpflichtungen (Arbeit, Vorlesungen, Sport etc.), damit der Planer weiss, wann du nicht verfügbar bist."
     )

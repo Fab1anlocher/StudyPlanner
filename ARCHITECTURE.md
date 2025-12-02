@@ -1,6 +1,7 @@
 # 🏗️ StudyPlanner Architecture Documentation
 
 ## 📋 Table of Contents
+- [Mermaid Diagram](#mermaid-diagram)
 - [Overview](#overview)
 - [Architecture Principles](#architecture-principles)
 - [Layer Documentation](#layer-documentation)
@@ -8,6 +9,97 @@
 - [Data Flow](#data-flow)
 - [Design Patterns](#design-patterns)
 - [Testing Strategy](#testing-strategy)
+
+---
+
+## 🎨 Mermaid Diagram
+
+Das folgende Diagramm zeigt die Hauptkomponenten und deren Zusammenspiel:
+
+```mermaid
+flowchart TB
+    subgraph UI["🎨 UI Layer (Streamlit)"]
+        APP[app.py<br/>Main Entry Point]
+        SETUP[setup_page.py<br/>Einrichtung]
+        PLAN[plan_page.py<br/>Lernplan]
+        EXPORT[export_page.py<br/>Export]
+        DISPLAY[display_plan.py<br/>Visualisierung]
+    end
+
+    subgraph SERVICES["🔧 Service Layer"]
+        LLM[LLM Service<br/>OpenAI / Gemini]
+        PLANNING[Planning Service<br/>Zeitfenster-Berechnung]
+        SESSION[Session Manager<br/>State Management]
+        EXPORT_SVC[Export Service<br/>PDF / Excel]
+    end
+
+    subgraph DATA["📊 Data Layer (Pydantic)"]
+        LN[Leistungsnachweis]
+        STUDY[StudySession]
+        BUSY[BusyTime]
+        ABS[Absence]
+        PREFS[UserPreferences]
+    end
+
+    subgraph CONFIG["⚙️ Configuration"]
+        CONST[constants.py<br/>Enums & Mappings]
+        SETTINGS[config/settings.py<br/>App Settings]
+        PROMPTS[prompts/<br/>LLM Prompt Versionen]
+    end
+
+    subgraph EXTERNAL["☁️ External APIs"]
+        OPENAI[OpenAI API<br/>GPT-4 / GPT-3.5]
+        GEMINI[Google Gemini API]
+    end
+
+    %% UI to Services
+    APP --> SETUP
+    APP --> PLAN
+    APP --> EXPORT
+    PLAN --> DISPLAY
+    
+    SETUP --> SESSION
+    PLAN --> LLM
+    PLAN --> PLANNING
+    EXPORT --> EXPORT_SVC
+
+    %% Services to Data
+    SESSION --> LN
+    SESSION --> BUSY
+    SESSION --> ABS
+    SESSION --> PREFS
+    LLM --> STUDY
+    PLANNING --> STUDY
+
+    %% Services to Config
+    LLM --> PROMPTS
+    LLM --> SETTINGS
+    PLANNING --> CONST
+
+    %% External APIs
+    LLM --> OPENAI
+    LLM --> GEMINI
+
+    style UI fill:#e6f3ff,stroke:#0066cc
+    style SERVICES fill:#e6ffe6,stroke:#009900
+    style DATA fill:#fff3e6,stroke:#ff9900
+    style CONFIG fill:#f0f0f0,stroke:#666666
+    style EXTERNAL fill:#ffe6f0,stroke:#cc0066
+```
+
+### Erklärung der Architektur
+
+Der **AI Study Planner** folgt einer klassischen **Schichten-Architektur** mit klarer Trennung der Verantwortlichkeiten:
+
+1. **UI Layer (Streamlit)**: Die Benutzeroberfläche sammelt Eingaben (Prüfungen, Termine, Präferenzen) und zeigt den generierten Lernplan an. Die Hauptdatei `app.py` dient als Router, während spezialisierte Page-Module (`setup_page.py`, `plan_page.py`, `export_page.py`) die einzelnen Workflows implementieren.
+
+2. **Service Layer**: Enthält die gesamte Geschäftslogik. Der **LLM Service** abstrahiert die Kommunikation mit OpenAI und Google Gemini über ein Adapter-Pattern. Der **Planning Service** berechnet verfügbare Zeitfenster unter Berücksichtigung von Verpflichtungen und Abwesenheiten. Der **Session Manager** verwaltet den Streamlit-Session-State zentral.
+
+3. **Data Layer (Pydantic Models)**: Definiert typsichere Datenstrukturen mit automatischer Validierung für Leistungsnachweise, Lernsessions, belegte Zeiten und Benutzer-Präferenzen.
+
+4. **Configuration Layer**: Zentralisiert alle Konstanten, Enums (Wochentage, Prüfungstypen) und App-Einstellungen. Die Prompt-Konfiguration ermöglicht das Wechseln zwischen verschiedenen Prompt-Engineering-Strategien (Zero-Shot, Few-Shot, Chain-of-Thought).
+
+Der Datenfluss beginnt bei der Benutzereingabe, durchläuft die Validierung über Pydantic-Models, wird vom Planning Service in freie Zeitfenster umgerechnet, vom LLM Service zu einem optimierten Lernplan verarbeitet und schliesslich über den Export Service als PDF oder Excel ausgegeben.
 
 ---
 

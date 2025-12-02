@@ -165,14 +165,12 @@ Sidebar → **Prompt Konfiguration** → **"Manuell"**
    - **Import**: Lade gespeicherte Prompts
 
 4. **Templates nutzen**
-   - `prompt_templates/` Ordner enthält 5 fertige Templates
+   - `data/prompt_templates/` Ordner enthält 5 fertige Templates
    - `minimal_prompt.json` - Minimalistisch
    - `balanced_prompt.json` - Ausgewogen
    - `ultra_detailed_prompt.json` - Maximal detailliert
    - `english_prompt.json` - Englische Version
    - `example_custom_prompt.json` - Standard-Template
-
-**Siehe auch**: `PROMPT_TESTING.md` für ausführliche Anleitung
 
 ---
 
@@ -183,6 +181,8 @@ StudyPlanner/
 ├── app.py                      # 🎯 Hauptanwendung & Router
 │
 ├── constants.py                # 📋 Zentrale Konstanten & Enums
+├── planning.py                 # ⏱️ Core Zeitfenster-Berechnungen
+│
 ├── config/                     # ⚙️ Konfiguration
 │   ├── __init__.py
 │   └── settings.py            # App-weite Einstellungen
@@ -198,51 +198,45 @@ StudyPlanner/
 ├── services/                   # 🔧 Business Logic Layer
 │   ├── __init__.py
 │   ├── llm_service.py         # LLM Provider Abstraction (OpenAI/Gemini)
-│   ├── planning_service.py    # Zeitfenster-Berechnung
+│   ├── planning_service.py    # Zeitfenster-Berechnung Wrapper
 │   ├── session_manager.py     # Session State Management
-│   └── export_service.py      # PDF/iCal/JSON Export
+│   └── export_service.py      # PDF & Excel Export
 │
 ├── ui/                         # 🎨 UI Layer
 │   ├── __init__.py
+│   ├── components/
+│   │   ├── __init__.py
+│   │   └── display_plan.py    # Plan-Visualisierung
 │   └── pages/
 │       ├── __init__.py
 │       ├── setup_page.py      # Einrichtungs-Seite
 │       ├── plan_page.py       # Lernplan-Seite
 │       └── export_page.py     # Export-Seite
 │
-├── tests/                      # ✅ Unit Tests
-│   ├── __init__.py
-│   ├── conftest.py            # Pytest Fixtures
-│   ├── test_constants.py
-│   ├── test_models.py
-│   ├── test_llm_service.py
-│   ├── test_planning_service.py
-│   ├── test_session_manager.py
-│   └── test_export_service.py
-│
 ├── prompts/                    # 📝 Vordefinierte Prompt-Versionen
 │   ├── __init__.py
+│   ├── prompt_config.py       # Prompt-Version Konfiguration
 │   ├── v1_zero_shot.py
 │   ├── v2_few_shot.py
 │   ├── v3_chain_of_thought.py
 │   └── v4_few_shot_cot.py
 │
-├── prompt_templates/           # 🎨 Experimentelle Templates
-│   ├── README.md
-│   ├── minimal_prompt.json
-│   ├── balanced_prompt.json
-│   ├── ultra_detailed_prompt.json
-│   ├── english_prompt.json
-│   └── example_custom_prompt.json
+├── data/                       # 📂 Daten & Templates
+│   ├── __init__.py
+│   ├── test_data.py           # Test-Daten für Entwicklung
+│   └── prompt_templates/      # Experimentelle JSON-Templates
+│       ├── minimal_prompt.json
+│       ├── balanced_prompt.json
+│       ├── ultra_detailed_prompt.json
+│       ├── english_prompt.json
+│       └── example_custom_prompt.json
 │
 ├── .streamlit/                 # 🎨 Streamlit Config
 │   └── config.toml
 │
-├── requirements.txt            # 📦 Production Dependencies
-├── requirements-dev.txt        # 🧪 Development Dependencies
-├── pytest.ini                  # ⚙️ Pytest Configuration
-├── .coveragerc                # 📊 Coverage Configuration
+├── requirements.txt            # 📦 Dependencies
 ├── .gitignore                 # 🚫 Git Exclusions
+├── ARCHITECTURE.md            # 📐 Architektur-Dokumentation
 └── README.md                  # 📖 Diese Datei
 ```
 
@@ -340,9 +334,7 @@ Prüfe Nutzung: [ai.google.dev](https://ai.google.dev/)
 | Datei | Beschreibung |
 |-------|--------------|
 | **README.md** | Diese Datei - Übersicht & Quick Start |
-| **PROMPT_TESTING.md** | Ausführlicher Guide zum Prompt-Testing |
-| **prompt_templates/README.md** | Template-Übersicht & Experimentier-Ideen |
-| **PROJEKTSTRUKTUR.md** | Technische Architektur |
+| **ARCHITECTURE.md** | Technische Architektur-Dokumentation |
 
 ---
 
@@ -352,9 +344,10 @@ Prüfe Nutzung: [ai.google.dev](https://ai.google.dev/)
 - **LLM-Provider**: 
   - [OpenAI](https://openai.com/) (GPT-4o, GPT-4o-mini, GPT-3.5-turbo)
   - [Google Gemini](https://ai.google.dev/) (gemini-1.5-flash, gemini-1.5-pro)
-- **Data Validation**: [Pydantic](https://docs.pydantic.dev/) 2.12.5
+- **Data Validation**: [Pydantic](https://docs.pydantic.dev/) 2.x
 - **Export Formate**: 
   - PDF via [fpdf2](https://pyfpdf.github.io/fpdf2/)
+  - Excel (.xlsx) via [openpyxl](https://openpyxl.readthedocs.io/)
 - **Sprache**: Python 3.8+
 
 ---

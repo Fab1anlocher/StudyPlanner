@@ -1,12 +1,9 @@
 """
-Test-Daten für einen realistischen BWL-Studenten
+Test-Daten für verschiedene Studenten-Profile
 
-Profil: Max, 22 Jahre, BWL-Student im 5. Semester
-- Arbeitet Montag & Dienstag (09:00-17:00) im Teilzeit-Job
-- Fussballtraining: Montag & Mittwoch Abend (18:30-20:30)
-- Vorlesungen: Mittwoch, Donnerstag, Freitag Vormittag
-- Wochenende: Samstag teilweise frei, Sonntag Ruhetag
-- Weihnachtsferien: 20.12.2025 - 05.01.2026
+Verfügbare Profile:
+1. Fabian (BWL-Student) - Prüfungen im Dezember/Januar
+2. Lena (Wirtschaftsinformatik-Studentin) - Prüfungen im Juni/Juli
 """
 
 from datetime import date, time, timedelta
@@ -14,9 +11,26 @@ from datetime import date, time, timedelta
 from constants import LeistungsnachweisType, ExamFormat, DEFAULT_PREFERENCES
 
 
-def get_test_data():
+# ════════════════════════════════════════════════════════════════
+# AVAILABLE TEST PROFILES
+# ════════════════════════════════════════════════════════════════
+
+AVAILABLE_TEST_PROFILES = {
+    "fabian": "Fabian (BWL, Winter)",
+    "lena": "Lena (Wirtschaftsinformatik, Sommer)",
+}
+
+
+def get_fabian_test_data():
     """
-    Gibt vollständige Testdaten für einen busy BWL-Studenten zurück.
+    Testdaten für Fabian: BWL-Student, Prüfungen im Dezember/Januar.
+    
+    Profil: Fabian, 22 Jahre, BWL-Student im 5. Semester
+    - Arbeitet Montag & Dienstag (09:00-17:00) im Teilzeit-Job
+    - Fussballtraining: Montag & Mittwoch Abend (18:30-20:30)
+    - Vorlesungen: Mittwoch, Donnerstag, Freitag Vormittag
+    - Wochenende: Samstag teilweise frei, Sonntag Ruhetag
+    - Weihnachtsferien: 20.12.2025 - 05.01.2026
 
     Returns:
         dict: Dictionary mit allen Session-State Daten
@@ -222,34 +236,270 @@ def get_test_data():
         "current_page": "setup",
         "plan_generated": False,
         "study_plan": None,
+        "profile_name": "Fabian",
     }
 
 
-def load_test_data_into_session_state(st):
+def get_lena_test_data():
+    """
+    Testdaten für Lena: Wirtschaftsinformatik-Studentin, Prüfungen im Juni/Juli.
+    
+    Profil: Lena, 24 Jahre, Wirtschaftsinformatik-Studentin im 4. Semester
+    - Vorlesungen: Montag bis Freitag (08:00-14:00)
+    - Nebenjob: Samstag (10:00-16:00)
+    - Sonntag: Ruhetag
+    - Pfingstferien: 07.06.2025 - 15.06.2025
+    
+    Returns:
+        dict: Dictionary mit allen Session-State Daten
+    """
+
+    # Semester-Zeitraum (Sommersemester)
+    study_start = date(2025, 5, 1)
+    study_end = date(2025, 7, 18)  # Ende basierend auf letzter Prüfung
+
+    # ==========================================
+    # LEISTUNGSNACHWEISE (5 Prüfungen/Arbeiten)
+    # ==========================================
+    leistungsnachweise = [
+        {
+            "title": "Datenbanken Prüfung",
+            "type": LeistungsnachweisType.PRUEFUNG,
+            "deadline": date(2025, 6, 20),
+            "module": "Datenbanken",
+            "topics": [
+                "Kapitel 1: Einführung in Datenbanken - DBMS, Relationale Modelle",
+                "Kapitel 2: SQL Grundlagen - SELECT, INSERT, UPDATE, DELETE",
+                "Kapitel 3: Erweiterte SQL - Joins, Subqueries, Aggregatfunktionen",
+                "Kapitel 4: Normalisierung - 1NF, 2NF, 3NF, BCNF",
+                "Kapitel 5: ER-Modellierung - Entities, Relationships, Attribute",
+                "Kapitel 6: Transaktionen - ACID, Isolation Levels",
+                "Kapitel 7: Indexierung und Performance - B-Trees, Hash-Index",
+                "Übungsaufgaben - SQL-Queries und ER-Diagramme",
+            ],
+            "priority": 5,
+            "effort": 4,
+            "exam_format": ExamFormat.RECHENAUFGABEN,
+            "exam_details": "90 Minuten, SQL-Queries schreiben, ER-Diagramme zeichnen, Normalisierung durchführen",
+        },
+        {
+            "title": "Software Engineering Projekt",
+            "type": LeistungsnachweisType.PROJEKTARBEIT,
+            "deadline": date(2025, 7, 5),
+            "module": "Software Engineering",
+            "topics": [
+                "Phase 1: Anforderungsanalyse - Use Cases, User Stories",
+                "Phase 2: Systemdesign - UML-Diagramme, Architektur",
+                "Phase 3: Implementierung - Clean Code, Design Patterns",
+                "Phase 4: Testing - Unit Tests, Integration Tests",
+                "Phase 5: Dokumentation - README, API-Docs",
+                "Präsentation - Demo und Verteidigung (15 Min)",
+            ],
+            "priority": 5,
+            "effort": 5,
+        },
+        {
+            "title": "Algorithmen und Datenstrukturen",
+            "type": LeistungsnachweisType.PRUEFUNG,
+            "deadline": date(2025, 6, 28),
+            "module": "Algorithmen",
+            "topics": [
+                "Teil 1: Komplexitätsanalyse - Big-O, Omega, Theta",
+                "Teil 2: Sortieralgorithmen - QuickSort, MergeSort, HeapSort",
+                "Teil 3: Suchalgorithmen - Binäre Suche, Hashtables",
+                "Teil 4: Graphen - BFS, DFS, Dijkstra, Kruskal",
+                "Teil 5: Dynamische Programmierung - Prinzipien, Beispiele",
+                "Teil 6: Bäume - Binärbäume, AVL, B-Bäume",
+                "Übungsblätter 1-10 durcharbeiten",
+            ],
+            "priority": 4,
+            "effort": 5,
+            "exam_format": ExamFormat.RECHENAUFGABEN,
+            "exam_details": "120 Minuten, Pseudocode schreiben, Komplexität analysieren, Closed Book",
+        },
+        {
+            "title": "Webentwicklung Hausarbeit",
+            "type": LeistungsnachweisType.HAUSARBEIT,
+            "deadline": date(2025, 7, 12),
+            "module": "Webentwicklung",
+            "topics": [
+                "Kapitel 1: HTML5 und CSS3 - Moderne Webtechnologien",
+                "Kapitel 2: JavaScript - DOM, Events, Async/Await",
+                "Kapitel 3: React/Vue Framework - Komponenten, State Management",
+                "Kapitel 4: REST APIs - Design, Implementation",
+                "Kapitel 5: Sicherheit - XSS, CSRF, Authentication",
+                "Praktische Arbeit - Full-Stack Webanwendung entwickeln",
+            ],
+            "priority": 3,
+            "effort": 4,
+        },
+        {
+            "title": "Betriebssysteme Prüfung",
+            "type": LeistungsnachweisType.PRUEFUNG,
+            "deadline": date(2025, 7, 18),
+            "module": "Betriebssysteme",
+            "topics": [
+                "Kapitel 1: Prozesse und Threads - Scheduling, Synchronisation",
+                "Kapitel 2: Speicherverwaltung - Paging, Segmentierung",
+                "Kapitel 3: Dateisysteme - Struktur, Zugriffsmethoden",
+                "Kapitel 4: I/O-Management - Gerätetreiber, Buffering",
+                "Kapitel 5: Deadlocks - Erkennung, Vermeidung, Recovery",
+                "Kapitel 6: Virtualisierung - VMs, Container",
+                "Übungsklausuren durcharbeiten",
+            ],
+            "priority": 4,
+            "effort": 4,
+            "exam_format": ExamFormat.GEMISCHT,
+            "exam_details": "90 Minuten, Multiple Choice + Rechenaufgaben, 1 A4 Formelblatt erlaubt",
+        },
+    ]
+
+    # ==========================================
+    # BELEGTE ZEITEN (Vorlesungen, Nebenjob)
+    # ==========================================
+    busy_times = [
+        {
+            "label": "Vorlesungen (Datenbanken, Algorithmen)",
+            "days": ["Montag", "Mittwoch"],
+            "start": "08:00",
+            "end": "14:00",
+        },
+        {
+            "label": "Vorlesungen (Software Engineering)",
+            "days": ["Dienstag"],
+            "start": "08:00",
+            "end": "12:00",
+        },
+        {
+            "label": "Vorlesungen (Webentwicklung, Betriebssysteme)",
+            "days": ["Donnerstag", "Freitag"],
+            "start": "08:00",
+            "end": "14:00",
+        },
+        {
+            "label": "Nebenjob IT-Support",
+            "days": ["Samstag"],
+            "start": "10:00",
+            "end": "16:00",
+        },
+    ]
+
+    # ==========================================
+    # FERIEN & ABWESENHEITEN
+    # ==========================================
+    absences = [
+        {
+            "label": "Pfingstferien",
+            "start_date": date(2025, 6, 7),
+            "end_date": date(2025, 6, 15),
+            "description": "Familienbesuch",
+        },
+    ]
+
+    # ==========================================
+    # PRÄFERENZEN
+    # ==========================================
+    preferences = {
+        "spacing": True,
+        "interleaving": False,  # Fokus auf ein Fach pro Block
+        "deep_work": True,  # Längere Sessions für Coding
+        "short_sessions": False,
+        "rest_days": ["Sonntag"],
+        "max_hours_day": 6,  # Max 6h Lernen pro Tag
+        "max_hours_week": 30,  # Max 30h pro Woche
+        "min_session_duration": 60,  # Mindestens 60 Min Sessions
+        "earliest_study_time": "14:00",  # Nach den Vorlesungen
+        "latest_study_time": "21:00",
+        "preferred_times_of_day": [
+            "afternoon",
+        ],  # Nachmittag bevorzugt
+    }
+
+    # ==========================================
+    # KOMPLETTER SESSION STATE
+    # ==========================================
+    return {
+        "study_start": study_start,
+        "study_end": study_end,
+        "leistungsnachweise": leistungsnachweise,
+        "busy_times": busy_times,
+        "absences": absences,
+        "preferences": preferences,
+        # UI State
+        "current_page": "setup",
+        "plan_generated": False,
+        "study_plan": None,
+        "profile_name": "Lena",
+    }
+
+
+# Alias for backward compatibility
+def get_test_data():
+    """
+    Gibt Testdaten für Fabian zurück (Standard-Profil für Abwärtskompatibilität).
+    
+    Returns:
+        dict: Dictionary mit allen Session-State Daten
+    """
+    return get_fabian_test_data()
+
+
+def get_test_data_by_profile(profile_key: str):
+    """
+    Gibt Testdaten für ein bestimmtes Profil zurück.
+    
+    Args:
+        profile_key: Der Schlüssel des Profils ("fabian" oder "lena")
+        
+    Returns:
+        dict: Dictionary mit allen Session-State Daten
+    """
+    if profile_key == "lena":
+        return get_lena_test_data()
+    else:
+        return get_fabian_test_data()
+
+
+def load_test_data_into_session_state(st, profile_key: str = "fabian"):
     """
     Lädt Test-Daten direkt in den Streamlit Session State.
 
     Args:
         st: Streamlit module
+        profile_key: Der Schlüssel des Profils ("fabian" oder "lena")
     """
-    test_data = get_test_data()
+    test_data = get_test_data_by_profile(profile_key)
 
     # Alle Daten in Session State laden
     for key, value in test_data.items():
         st.session_state[key] = value
 
-    # Success Message
-    st.success(
-        """
-    ✅ **Test-Daten geladen!**
+    profile_name = test_data.get("profile_name", profile_key.capitalize())
     
-    **Profil: Max, 22 Jahre, BWL-Student**
-    - 🏢 Arbeit: Montag & Dienstag (09:00-17:00)
-    - ⚽ Fussball: Montag & Mittwoch Abend
-    - 📚 Vorlesungen: Mittwoch, Donnerstag, Freitag
-    - 🏖️ Ferien: Weihnachten (20.12. - 05.01.)
-    - 📝 5 Prüfungen/Arbeiten im Semester
-    """
-    )
+    if profile_key == "fabian":
+        st.success(
+            f"""
+        ✅ **Test-Daten geladen: {profile_name}**
+        
+        **Profil: Fabian, 22 Jahre, BWL-Student**
+        - 🏢 Arbeit: Montag & Dienstag (09:00-17:00)
+        - ⚽ Fussball: Montag & Mittwoch Abend
+        - 📚 Vorlesungen: Mittwoch, Donnerstag, Freitag
+        - 🏖️ Ferien: Weihnachten (20.12. - 05.01.)
+        - 📝 5 Prüfungen/Arbeiten im Semester (Dez/Jan)
+        """
+        )
+    else:  # lena
+        st.success(
+            f"""
+        ✅ **Test-Daten geladen: {profile_name}**
+        
+        **Profil: Lena, 24 Jahre, Wirtschaftsinformatik-Studentin**
+        - 📚 Vorlesungen: Mo-Fr (08:00-14:00)
+        - 💼 Nebenjob: Samstag (10:00-16:00)
+        - 🏖️ Ferien: Pfingsten (07.06. - 15.06.)
+        - 📝 5 Prüfungen/Arbeiten im Sommersemester (Juni/Juli)
+        """
+        )
 
     st.info("💡 Wechsle jetzt zur **Lernplan**-Seite, um deinen KI-Lernplan zu generieren!")

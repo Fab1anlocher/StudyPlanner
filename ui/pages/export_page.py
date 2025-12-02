@@ -152,7 +152,14 @@ def show_export_page():
         # Generate PDF using export service
         study_start = st.session_state.study_start
         study_end = st.session_state.study_end
-        pdf_bytes = create_pdf_export(sorted_plan, study_start, study_end)
+        pdf_bytes = create_pdf_export(
+            sorted_plan, 
+            study_start, 
+            study_end,
+            busy_times=st.session_state.get("busy_times", []),
+            absences=st.session_state.get("absences", []),
+            preferences=st.session_state.get("preferences", {}),
+        )
 
         # Download button
         col1, col2 = st.columns([2, 1])

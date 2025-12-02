@@ -3,7 +3,7 @@ Export Service
 Bietet Export-Formate für den Lernplan (PDF, Excel)
 """
 
-from datetime import datetime, date as date_type
+from datetime import datetime, date as date_type, timedelta
 from typing import List, Dict, Any, Optional
 from fpdf import FPDF
 from openpyxl import Workbook
@@ -14,8 +14,62 @@ from io import BytesIO
 from constants import WEEKDAY_EN_CAPITALIZED_TO_DE, DATE_FORMAT_DISPLAY
 
 
+def _sanitize_text_for_pdf(text: str) -> str:
+    """
+    Sanitize text for PDF output by replacing problematic Unicode characters
+    with ASCII equivalents that Helvetica can handle.
+    
+    Args:
+        text: Input text that may contain special characters
+        
+    Returns:
+        Sanitized text safe for PDF rendering
+    """
+    if not text:
+        return text
+    
+    # Replace common problematic Unicode characters with ASCII equivalents
+    replacements = {
+        '–': '-',  # en-dash
+        '—': '-',  # em-dash
+        ''': "'",  # right single quote
+        ''': "'",  # left single quote
+        '"': '"',  # left double quote
+        '"': '"',  # right double quote
+        '…': '...',  # ellipsis
+        '•': '*',  # bullet
+        '→': '->',  # arrow
+        '←': '<-',  # arrow
+        '↔': '<->',  # double arrow
+        '≥': '>=',  # greater or equal
+        '≤': '<=',  # less or equal
+        '≠': '!=',  # not equal
+        '×': 'x',  # multiplication
+        '÷': '/',  # division
+        '±': '+/-',  # plus-minus
+        '€': 'EUR',  # euro
+        '£': 'GBP',  # pound
+        '¥': 'JPY',  # yen
+        '©': '(c)',  # copyright
+        '®': '(R)',  # registered
+        '™': '(TM)',  # trademark
+        '\u00a0': ' ',  # non-breaking space
+    }
+    
+    result = text
+    for char, replacement in replacements.items():
+        result = result.replace(char, replacement)
+    
+    return result
+
+
 def create_pdf_export(
-    plan: List[Dict[str, Any]], study_start: date_type, study_end: Optional[date_type]
+    plan: List[Dict[str, Any]], 
+    study_start: date_type, 
+    study_end: Optional[date_type],
+    busy_times: Optional[List[Dict[str, Any]]] = None,
+    absences: Optional[List[Dict[str, Any]]] = None,
+    preferences: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     """
     Create a PDF document from the study plan.
@@ -24,10 +78,17 @@ def create_pdf_export(
         plan: List of study session dicts, sorted chronologically
         study_start: Start date of study plan
         study_end: End date of study plan
+        busy_times: Optional list of recurring busy time blocks
+        absences: Optional list of absence periods
+        preferences: Optional dict with user preferences (limits, etc.)
 
     Returns:
         PDF file as bytes
     """
+    busy_times = busy_times or []
+    absences = absences or []
+    preferences = preferences or {}
+    
     # Create PDF object
     pdf = FPDF()
     pdf.add_page()
@@ -35,15 +96,66 @@ def create_pdf_export(
 
     # Title
     pdf.set_font("Helvetica", "B", 20)
-    pdf.cell(0, 10, "Personalisierter Lernplan", ln=True, align="C")
+    pdf.cell(0, 10, _sanitize_text_for_pdf("Personalisierter Lernplan"), ln=True, align="C")
     pdf.ln(5)
 
     # Study plan dates
     pdf.set_font("Helvetica", "", 12)
     start_str = study_start.strftime(DATE_FORMAT_DISPLAY)
     end_str = study_end.strftime(DATE_FORMAT_DISPLAY) if study_end else "N/A"
-    pdf.cell(0, 8, f"Lernplan: {start_str} - {end_str}", ln=True, align="C")
-    pdf.ln(10)
+    pdf.cell(0, 8, _sanitize_text_for_pdf(f"Lernplan: {start_str} - {end_str}"), ln=True, align="C")
+    pdf.ln(5)
+    
+    # Limits info section
+    if preferences:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 6, "Lern-Limits:", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        
+        max_hours_day = preferences.get("max_hours_day", "Kein Limit")
+        max_hours_week = preferences.get("max_hours_week", "Kein Limit")
+        min_session = preferences.get("min_session_duration", 60)
+        
+        pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Max. Stunden/Tag: {max_hours_day}"), ln=True)
+        pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Max. Stunden/Woche: {max_hours_week if max_hours_week else 'Kein Limit'}"), ln=True)
+        pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Min. Session-Dauer: {min_session} Minuten"), ln=True)
+        pdf.ln(3)
+
+    # Absences section
+    if absences:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 6, "Abwesenheiten:", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        
+        for absence in absences:
+            start_date = absence.get("start_date")
+            end_date = absence.get("end_date")
+            label = absence.get("label", "Abwesenheit")
+            
+            if start_date and end_date:
+                start_str = start_date.strftime("%d.%m.%Y")
+                end_str = end_date.strftime("%d.%m.%Y")
+                pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - {label}: {start_str} - {end_str}"), ln=True)
+        pdf.ln(3)
+    
+    # Busy times section
+    if busy_times:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 6, "Wiederkehrende Verpflichtungen:", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        
+        for busy in busy_times:
+            label = busy.get("label", "Belegt")
+            days = ", ".join(busy.get("days", []))
+            start = busy.get("start", "")
+            end = busy.get("end", "")
+            pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - {label}: {days}, {start}-{end}"), ln=True)
+        pdf.ln(3)
+
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "Lernplan Details:", ln=True)
+    pdf.ln(3)
 
     # Group sessions by date
     sessions_by_date = {}
@@ -53,6 +165,17 @@ def create_pdf_export(
             sessions_by_date[date_key] = []
         sessions_by_date[date_key].append(session)
 
+    # Pre-compute busy times by weekday for O(1) lookup
+    weekday_names_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+    busy_by_weekday = {i: [] for i in range(7)}
+    for busy in busy_times:
+        for day_name in busy.get("days", []):
+            try:
+                day_idx = weekday_names_de.index(day_name)
+                busy_by_weekday[day_idx].append(busy)
+            except ValueError:
+                pass
+
     # Iterate through each date
     for date_str in sorted(sessions_by_date.keys()):
         # Parse and format date with German weekday
@@ -61,13 +184,25 @@ def create_pdf_export(
             weekday_en = session_date.strftime("%A")
             weekday_de = WEEKDAY_EN_CAPITALIZED_TO_DE.get(weekday_en, weekday_en)
             date_display = f"{weekday_de}, {session_date.strftime(DATE_FORMAT_DISPLAY)}"
+            weekday_idx = session_date.weekday()
         except:
             date_display = date_str
+            weekday_idx = -1
 
         # Date header (bold)
-        pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 8, date_display, ln=True)
-        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(0, 8, _sanitize_text_for_pdf(date_display), ln=True)
+        
+        # Show busy times for this weekday
+        if weekday_idx >= 0 and busy_by_weekday[weekday_idx]:
+            for busy in busy_by_weekday[weekday_idx]:
+                label = busy.get("label", "Belegt")
+                start = busy.get("start", "")
+                end = busy.get("end", "")
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(150, 100, 0)  # Orange-brown color
+                pdf.cell(0, 5, _sanitize_text_for_pdf(f"  [Belegt] {start}-{end}: {label}"), ln=True)
+                pdf.set_text_color(0, 0, 0)  # Reset to black
 
         # Sessions for this date
         sessions = sessions_by_date[date_str]
@@ -80,27 +215,27 @@ def create_pdf_export(
             description = session.get("description", "")
 
             # Time (bold)
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(35, 6, f"{start} - {end}", ln=False)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(35, 6, _sanitize_text_for_pdf(f"{start} - {end}"), ln=False)
 
             # Module
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 6, module, ln=True)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(0, 6, _sanitize_text_for_pdf(module), ln=True)
 
             # Topic (indented)
-            pdf.set_font("Helvetica", "", 10)
+            pdf.set_font("Helvetica", "", 9)
             pdf.set_x(45)
-            pdf.cell(0, 5, f"Thema: {topic}", ln=True)
+            pdf.cell(0, 5, _sanitize_text_for_pdf(f"Thema: {topic}"), ln=True)
 
             # Description (indented, smaller font)
             if description:
-                pdf.set_font("Helvetica", "", 9)
+                pdf.set_font("Helvetica", "", 8)
                 pdf.set_x(45)
-                pdf.multi_cell(0, 5, description)
+                pdf.multi_cell(0, 5, _sanitize_text_for_pdf(description))
 
-            pdf.ln(2)
+            pdf.ln(1)
 
-        pdf.ln(5)
+        pdf.ln(3)
 
     # Footer with generation info
     pdf.set_y(-30)
@@ -108,11 +243,11 @@ def create_pdf_export(
     pdf.cell(
         0,
         5,
-        f"Generated on {datetime.now().strftime('%d %B %Y at %H:%M')}",
+        _sanitize_text_for_pdf(f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M')}"),
         ln=True,
         align="C",
     )
-    pdf.cell(0, 5, "Created with AI Study Planner", ln=True, align="C")
+    pdf.cell(0, 5, "KI-Lernplaner", ln=True, align="C")
 
     # Return PDF as bytes
     return bytes(pdf.output())

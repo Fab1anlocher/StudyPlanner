@@ -23,7 +23,7 @@ from prompts.prompt_config import get_active_prompts, AVAILABLE_VERSIONS, ACTIVE
 get_system_prompt, build_user_prompt = get_active_prompts()
 
 # Import test data
-from data.test_data import load_test_data_into_session_state
+from data.test_data import load_test_data_into_session_state, AVAILABLE_TEST_PROFILES
 
 # Import Services
 from services import (
@@ -452,8 +452,12 @@ def main():
     with st.sidebar.expander("ℹ️ Was ist das?", expanded=False):
         st.markdown(
             """
-        **Test-Daten** bieten ein vordefiniertes Profil eines BWL-Studenten:
+        **Test-Daten** bieten vordefinierte Studenten-Profile:
 
+        - **Fabian (BWL)**: Prüfungen im Winter (Dez/Jan)
+        - **Lena (Wirtschaftsinformatik)**: Prüfungen im Sommer (Juni/Juli)
+
+        Jedes Profil enthält:
         - 5 Leistungsnachweise
         - Vorlesungszeiten & Nebenjob
         - Abwesenheiten & Präferenzen
@@ -462,10 +466,19 @@ def main():
         """
         )
 
+    # Test profile selection
+    selected_profile = st.sidebar.selectbox(
+        "Testprofil auswählen",
+        options=list(AVAILABLE_TEST_PROFILES.keys()),
+        format_func=lambda x: AVAILABLE_TEST_PROFILES[x],
+        key="test_profile_selector",
+        help="Wähle ein Testprofil zum Laden",
+    )
+
     if st.sidebar.button(
         "📋 Test-Daten laden", type="primary", use_container_width=True
     ):
-        load_test_data_into_session_state(st)
+        load_test_data_into_session_state(st, selected_profile)
         st.rerun()
 
     st.sidebar.markdown("---")

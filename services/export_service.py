@@ -113,11 +113,11 @@ def create_pdf_export(
         pdf.set_font("Helvetica", "", 10)
         
         max_hours_day = preferences.get("max_hours_day", "Kein Limit")
-        max_hours_week = preferences.get("max_hours_week", "Kein Limit")
+        max_hours_week = preferences.get("max_hours_week")
         min_session = preferences.get("min_session_duration", 60)
         
         pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Max. Stunden/Tag: {max_hours_day}"), ln=True)
-        pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Max. Stunden/Woche: {max_hours_week if max_hours_week else 'Kein Limit'}"), ln=True)
+        pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Max. Stunden/Woche: {max_hours_week if max_hours_week is not None else 'Kein Limit'}"), ln=True)
         pdf.cell(0, 5, _sanitize_text_for_pdf(f"  - Min. Session-Dauer: {min_session} Minuten"), ln=True)
         pdf.ln(3)
 
@@ -166,15 +166,16 @@ def create_pdf_export(
         sessions_by_date[date_key].append(session)
 
     # Pre-compute busy times by weekday for O(1) lookup
-    weekday_names_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+    # Using case-insensitive matching for robustness
+    weekday_names_de_lower = ["montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag"]
     busy_by_weekday = {i: [] for i in range(7)}
     for busy in busy_times:
         for day_name in busy.get("days", []):
-            try:
-                day_idx = weekday_names_de.index(day_name)
+            day_name_lower = day_name.lower()
+            if day_name_lower in weekday_names_de_lower:
+                day_idx = weekday_names_de_lower.index(day_name_lower)
                 busy_by_weekday[day_idx].append(busy)
-            except ValueError:
-                pass
+            # Skip unknown day names silently - they shouldn't occur with proper UI usage
 
     # Iterate through each date
     for date_str in sorted(sessions_by_date.keys()):

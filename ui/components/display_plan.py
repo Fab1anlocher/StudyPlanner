@@ -102,6 +102,36 @@ def display_weekly_view(sorted_plan):
     busy_times = st.session_state.get("busy_times", [])
     absences = st.session_state.get("absences", [])
 
+    # Pre-compute busy times grouped by weekday index (0=Monday, 6=Sunday)
+    # This avoids recomputing for every week since busy times are recurring
+    weekday_names_en = [
+        "monday", "tuesday", "wednesday", "thursday",
+        "friday", "saturday", "sunday"
+    ]
+    busy_times_by_weekday = {i: [] for i in range(7)}
+    for busy in busy_times:
+        busy_days_lower = {d.lower() for d in busy.get("days", [])}
+        for day_idx, weekday_name in enumerate(weekday_names_en):
+            if weekday_name in busy_days_lower:
+                busy_times_by_weekday[day_idx].append({
+                    "label": busy.get("label", "Belegt"),
+                    "start": busy.get("start", ""),
+                    "end": busy.get("end", ""),
+                })
+
+    # Pre-compute exams/deadlines by date for O(1) lookup
+    leistungsnachweise = st.session_state.get("leistungsnachweise", [])
+    exams_by_date = {}
+    for ln in leistungsnachweise:
+        deadline = ln.get("deadline")
+        if deadline:
+            if deadline not in exams_by_date:
+                exams_by_date[deadline] = []
+            exams_by_date[deadline].append({
+                "title": ln.get("title", "Prüfung"),
+                "type": ln.get("type", "Prüfung"),
+            })
+
     # Initialize all weeks in the semester
     weeks = {}
     current_date = semester_start
@@ -181,43 +211,17 @@ def display_weekly_view(sorted_plan):
                             absence.get("label", "Abwesenheit")
                         )
 
-        # Prepare busy times for each day
-        weekday_names_en = [
-            "monday",
-            "tuesday",
-            "wednesday",
-            "thursday",
-            "friday",
-            "saturday",
-            "sunday",
-        ]
-        days_busy = {i: [] for i in range(7)}
-        for day_idx in range(7):
-            weekday_name = weekday_names_en[day_idx]
-            for busy in busy_times:
-                if weekday_name.lower() in [d.lower() for d in busy.get("days", [])]:
-                    days_busy[day_idx].append(
-                        {
-                            "label": busy.get("label", "Belegt"),
-                            "start": busy.get("start", ""),
-                            "end": busy.get("end", ""),
-                        }
-                    )
+        # Use pre-computed busy times (already grouped by weekday)
+        # Note: Create a shallow copy to avoid potential reference issues
+        days_busy = {i: busy_times_by_weekday[i] for i in range(7)}
 
-        # Check for exams/deadlines on each day in this week
-        leistungsnachweise = st.session_state.get("leistungsnachweise", [])
+        # Check for exams/deadlines on each day using pre-computed lookup (O(1) per day)
         days_exams = {i: [] for i in range(7)}
         for day_idx in range(7):
             day_date = week_start + timedelta(days=day_idx)
-            for ln in leistungsnachweise:
-                deadline = ln.get("deadline")
-                if deadline and deadline == day_date:
-                    days_exams[day_idx].append(
-                        {
-                            "title": ln.get("title", "Prüfung"),
-                            "type": ln.get("type", "Prüfung"),
-                        }
-                    )
+            if day_date in exams_by_date:
+                # Use list copy to avoid modifying original data
+                days_exams[day_idx] = list(exams_by_date[day_date])
 
         # Sort sessions within each day by start time
         for day_idx in range(7):

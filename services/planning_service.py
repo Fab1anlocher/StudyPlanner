@@ -14,6 +14,16 @@ from constants import (
     DEFAULT_LATEST_STUDY_TIME,
 )
 
+# Pre-computed time constants to avoid repeated datetime.strptime() calls
+# These are module-level constants parsed once at import time
+_TIME_07_00 = time(7, 0)
+_TIME_08_00 = time(8, 0)
+_TIME_12_00 = time(12, 0)
+_TIME_17_00 = time(17, 0)
+_TIME_18_00 = time(18, 0)
+_TIME_20_00 = time(20, 0)
+_TIME_22_00 = time(22, 0)
+
 
 def calculate_free_slots_from_session(
     session_state,
@@ -126,50 +136,30 @@ def _get_time_boundaries(preferred_times: List[str]) -> Tuple[time, time]:
     """
     if not preferred_times:
         # Default: 08:00-20:00 (reasonable student hours)
-        return (
-            datetime.strptime(DEFAULT_EARLIEST_STUDY_TIME, TIME_FORMAT).time(),
-            datetime.strptime(DEFAULT_LATEST_STUDY_TIME, TIME_FORMAT).time(),
-        )
+        return (_TIME_08_00, _TIME_20_00)
 
-    # Map preferences to time ranges
-    if (
-        "morning" in preferred_times
-        and "afternoon" not in preferred_times
-        and "evening" not in preferred_times
-    ):
+    # Convert to set for O(1) membership testing
+    prefs = set(preferred_times)
+
+    # Map preferences to time ranges using pre-computed time constants
+    if prefs == {"morning"}:
         # Only morning: 07:00-12:00
-        earliest = datetime.strptime("07:00", TIME_FORMAT).time()
-        latest = datetime.strptime("12:00", TIME_FORMAT).time()
-    elif (
-        "afternoon" in preferred_times
-        and "morning" not in preferred_times
-        and "evening" not in preferred_times
-    ):
+        return (_TIME_07_00, _TIME_12_00)
+    elif prefs == {"afternoon"}:
         # Only afternoon: 12:00-18:00
-        earliest = datetime.strptime("12:00", TIME_FORMAT).time()
-        latest = datetime.strptime("18:00", TIME_FORMAT).time()
-    elif (
-        "evening" in preferred_times
-        and "morning" not in preferred_times
-        and "afternoon" not in preferred_times
-    ):
+        return (_TIME_12_00, _TIME_18_00)
+    elif prefs == {"evening"}:
         # Only evening: 17:00-22:00
-        earliest = datetime.strptime("17:00", TIME_FORMAT).time()
-        latest = datetime.strptime("22:00", TIME_FORMAT).time()
-    elif "morning" in preferred_times and "afternoon" in preferred_times:
+        return (_TIME_17_00, _TIME_22_00)
+    elif "morning" in prefs and "afternoon" in prefs and "evening" not in prefs:
         # Morning + afternoon: 07:00-18:00
-        earliest = datetime.strptime("07:00", TIME_FORMAT).time()
-        latest = datetime.strptime("18:00", TIME_FORMAT).time()
-    elif "afternoon" in preferred_times and "evening" in preferred_times:
+        return (_TIME_07_00, _TIME_18_00)
+    elif "afternoon" in prefs and "evening" in prefs and "morning" not in prefs:
         # Afternoon + evening: 12:00-22:00
-        earliest = datetime.strptime("12:00", TIME_FORMAT).time()
-        latest = datetime.strptime("22:00", TIME_FORMAT).time()
+        return (_TIME_12_00, _TIME_22_00)
     else:
         # All times or morning+evening: 07:00-22:00 (most flexible)
-        earliest = datetime.strptime("07:00", TIME_FORMAT).time()
-        latest = datetime.strptime("22:00", TIME_FORMAT).time()
-
-    return earliest, latest
+        return (_TIME_07_00, _TIME_22_00)
 
 
 def _convert_busy_times(busy_times: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

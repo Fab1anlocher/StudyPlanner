@@ -59,6 +59,21 @@ def calculate_free_slots(
                 absence_lookup.add(current_date)
                 current_date += timedelta(days=1)
 
+    # Pre-group busy times by weekday for O(1) lookup instead of O(n) per day
+    # This avoids iterating through all busy_times for each day in the semester
+    busy_times_by_day: Dict[str, List[Tuple[time, time]]] = {}
+    for busy in busy_times:
+        day = busy.get("day")
+        busy_start = busy.get("start")
+        busy_end = busy.get("end")
+        if day and busy_start and busy_end:
+            if day not in busy_times_by_day:
+                busy_times_by_day[day] = []
+            busy_times_by_day[day].append((busy_start, busy_end))
+
+    # Convert rest_days to a set for O(1) lookup
+    rest_days_set = set(rest_days)
+
     free_slots = []
     current_date = study_start
 
@@ -67,8 +82,8 @@ def calculate_free_slots(
         weekday_index = current_date.weekday()
         weekday_name = WEEKDAY_INDEX_TO_EN[weekday_index]
 
-        # Skip rest days
-        if weekday_name in rest_days:
+        # Skip rest days (O(1) lookup with set)
+        if weekday_name in rest_days_set:
             current_date += timedelta(days=1)
             continue
 
@@ -80,21 +95,17 @@ def calculate_free_slots(
         # Start with the full day as a free slot (from earliest to latest study time)
         free_intervals = [(earliest_study_time, latest_study_time)]
 
-        # Subtract all busy times for this weekday
-        for busy in busy_times:
-            if busy.get("day") == weekday_name:
-                busy_start = busy.get("start")
-                busy_end = busy.get("end")
-
-                if busy_start and busy_end:
-                    # Apply busy time to all current free intervals
-                    new_intervals = []
-                    for free_start, free_end in free_intervals:
-                        remaining = subtract_time_interval(
-                            free_start, free_end, busy_start, busy_end
-                        )
-                        new_intervals.extend(remaining)
-                    free_intervals = new_intervals
+        # Subtract busy times for this weekday (O(1) lookup for the day's busy times)
+        day_busy_times = busy_times_by_day.get(weekday_name, [])
+        for busy_start, busy_end in day_busy_times:
+            # Apply busy time to all current free intervals
+            new_intervals = []
+            for free_start, free_end in free_intervals:
+                remaining = subtract_time_interval(
+                    free_start, free_end, busy_start, busy_end
+                )
+                new_intervals.extend(remaining)
+            free_intervals = new_intervals
 
         # Truncate to max hours per day
         free_intervals = truncate_intervals_to_max_hours(free_intervals, max_hours_day)

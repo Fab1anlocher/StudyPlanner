@@ -190,6 +190,16 @@ def build_user_prompt(data: dict) -> str:
             del absence_copy["end_date"]
         absences_serializable.append(absence_copy)
 
+    # Busy times serialisieren (valid_from, valid_until können date-Objekte sein)
+    busy_times_serializable = []
+    for busy in busy_times:
+        busy_copy = busy.copy()
+        if "valid_from" in busy_copy and hasattr(busy_copy["valid_from"], "isoformat"):
+            busy_copy["valid_from"] = busy_copy["valid_from"].isoformat()
+        if "valid_until" in busy_copy and hasattr(busy_copy["valid_until"], "isoformat"):
+            busy_copy["valid_until"] = busy_copy["valid_until"].isoformat()
+        busy_times_serializable.append(busy_copy)
+
     return f"""
 STUDENTENDATEN – REALER FALL:
 
@@ -222,7 +232,7 @@ Diese Zeiten sind NICHT zum Lernen verfügbar, aber der Kontext ist wichtig:
 - "Arbeit/Nebenjob" → Danach evtl. müde, weniger konzentriert
 - "Vorlesung Marketing" → Thematisch verknüpft - kurz danach Marketing lernen ist sinnvoll
 - "Sport/Fitnessstudio" → Direkt davor/danach lernen vermeiden (Energie!)
-{json.dumps(busy_times, ensure_ascii=False, indent=2)}
+{json.dumps(busy_times_serializable, ensure_ascii=False, indent=2)}
 
 AUFGABE:
 • Analysiere diese Daten in mehreren gedanklichen Schritten (intern).

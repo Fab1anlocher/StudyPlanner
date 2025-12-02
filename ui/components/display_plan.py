@@ -212,14 +212,16 @@ def display_weekly_view(sorted_plan):
                         )
 
         # Use pre-computed busy times (already grouped by weekday)
-        days_busy = busy_times_by_weekday
+        # Note: Create a shallow copy to avoid potential reference issues
+        days_busy = {i: busy_times_by_weekday[i] for i in range(7)}
 
         # Check for exams/deadlines on each day using pre-computed lookup (O(1) per day)
         days_exams = {i: [] for i in range(7)}
         for day_idx in range(7):
             day_date = week_start + timedelta(days=day_idx)
             if day_date in exams_by_date:
-                days_exams[day_idx] = exams_by_date[day_date]
+                # Use list copy to avoid modifying original data
+                days_exams[day_idx] = list(exams_by_date[day_date])
 
         # Sort sessions within each day by start time
         for day_idx in range(7):

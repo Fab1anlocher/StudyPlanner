@@ -23,6 +23,11 @@ ANFORDERUNGEN:
 • Vermeide Überlastung: nicht mehr als 2–3 konzentrierte Einheiten pro Tag
 • Inhalt PRO Eintrag: ein klarer Lernsprint mit spezifischem Auftrag
 
+MANDATORY CONSTRAINTS - MÜSSEN EINGEHALTEN WERDEN:
+• Max. Stunden pro Tag: Siehe Lernpräferenzen - NIE überschreiten!
+• Max. Stunden pro Woche: Siehe Lernpräferenzen - Wochenbudget strikt respektieren (0 = unbegrenzt)
+• Min. Session-Dauer: Siehe Lernpräferenzen - Keine Sessions kürzer als angegeben!
+
 PRÜFUNGSFORMAT-STRATEGIE:
 • Multiple Choice: Fokus auf Definitionen auswendig lernen, Karteikarten, Wiederholung
 • Rechenaufgaben: Fokus auf Übungsaufgaben rechnen, Lösungswege verstehen, Formeln anwenden

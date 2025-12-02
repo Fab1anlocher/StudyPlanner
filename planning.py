@@ -112,6 +112,9 @@ def calculate_free_slots(
         # Truncate to max hours per day
         free_intervals = truncate_intervals_to_max_hours(free_intervals, max_hours_day)
 
+        # Filter by minimum session duration
+        free_intervals = filter_by_min_duration(free_intervals, min_session_duration)
+
         # Add valid intervals to result
         for start_time, end_time in free_intervals:
             free_slots.append(
@@ -124,6 +127,10 @@ def calculate_free_slots(
             )
 
         current_date += timedelta(days=1)
+
+    # Apply weekly limit if specified
+    if max_hours_week > 0:
+        free_slots = apply_weekly_limit(free_slots, max_hours_week)
 
     return free_slots, None
 
@@ -208,4 +215,60 @@ def truncate_intervals_to_max_hours(
             accumulated_hours = max_hours
             break
 
+    return result
+
+
+def filter_by_min_duration(
+    intervals: List[Tuple[time, time]], min_duration_hours: float
+) -> List[Tuple[time, time]]:
+    result = []
+    for start_time, end_time in intervals:
+        duration_hours = (
+            datetime.combine(date.min, end_time)
+            - datetime.combine(date.min, start_time)
+        ).total_seconds() / 3600
+        if duration_hours >= min_duration_hours:
+            result.append((start_time, end_time))
+    return result
+
+
+def apply_weekly_limit(
+    slots: List[Dict[str, Any]], max_hours_week: float
+) -> List[Dict[str, Any]]:
+    from collections import defaultdict
+    weeks = defaultdict(list)
+    for slot in slots:
+        slot_date = slot["date"]
+        days_since_monday = slot_date.weekday()
+        week_start = slot_date - timedelta(days=days_since_monday)
+        weeks[week_start].append(slot)
+    result = []
+    for week_start in sorted(weeks.keys()):
+        week_slots = weeks[week_start]
+        week_hours = 0.0
+        for slot in week_slots:
+            slot_hours = (
+                datetime.combine(date.min, slot["end_time"])
+                - datetime.combine(date.min, slot["start_time"])
+            ).total_seconds() / 3600
+            if week_hours + slot_hours <= max_hours_week:
+                result.append(slot)
+                week_hours += slot_hours
+            elif week_hours < max_hours_week:
+                remaining_hours = max_hours_week - week_hours
+                remaining_seconds = int(remaining_hours * 3600)
+                new_end_time = (
+                    datetime.combine(date.min, slot["start_time"])
+                    + timedelta(seconds=remaining_seconds)
+                ).time()
+                result.append({
+                    "date": slot["date"],
+                    "day": slot["day"],
+                    "start_time": slot["start_time"],
+                    "end_time": new_end_time,
+                })
+                week_hours = max_hours_week
+                break
+            else:
+                break
     return result

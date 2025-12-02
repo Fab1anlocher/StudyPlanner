@@ -309,7 +309,7 @@ Der Plan wird dennoch erstellt, aber möglicherweise nicht alle Themen abdecken.
                         with col2:
                             try:
                                 current_start = datetime.strptime(busy["start"], "%H:%M").time()
-                            except:
+                            except (ValueError, TypeError):
                                 current_start = None
                             edit_start = st.time_input(
                                 "Startzeit",
@@ -318,7 +318,7 @@ Der Plan wird dennoch erstellt, aber möglicherweise nicht alle Themen abdecken.
                             )
                             try:
                                 current_end = datetime.strptime(busy["end"], "%H:%M").time()
-                            except:
+                            except (ValueError, TypeError):
                                 current_end = None
                             edit_end = st.time_input(
                                 "Endzeit",

@@ -398,7 +398,7 @@ def show_setup_page():
                     # Get current time values or parse from string
                     try:
                         current_start = datetime.strptime(busy["start"], "%H:%M").time()
-                    except:
+                    except (ValueError, TypeError):
                         current_start = None
                     new_start = st.time_input(
                         "Startzeit",
@@ -409,7 +409,7 @@ def show_setup_page():
                 with col2:
                     try:
                         current_end = datetime.strptime(busy["end"], "%H:%M").time()
-                    except:
+                    except (ValueError, TypeError):
                         current_end = None
                     new_end = st.time_input(
                         "Endzeit",

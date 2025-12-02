@@ -155,6 +155,14 @@ def create_excel_export(
         bottom=Side(style='thin')
     )
     
+    def set_date_cell(cell, date_value, apply_border=True):
+        """Helper to format a cell as a date with DD.MM.YYYY format."""
+        cell.value = date_value
+        if date_value:
+            cell.number_format = 'DD.MM.YYYY'
+        if apply_border:
+            cell.border = border
+    
     # Sheet 1: Lernplan (Study Sessions)
     ws_plan = wb.active
     ws_plan.title = "Lernplan"
@@ -193,16 +201,15 @@ def create_excel_export(
         except:
             pass
         
-        # Write date cell with proper Excel date format
+        # Write date cell with proper Excel date format using helper
         date_cell = ws_plan.cell(row=row_num, column=1)
         if session_date:
-            date_cell.value = session_date
-            date_cell.number_format = 'DD.MM.YYYY'
+            set_date_cell(date_cell, session_date)
         else:
             date_cell.value = date_str
-        date_cell.border = border
+            date_cell.border = border
         
-        # Write remaining data
+        # Write remaining data (start from column 2 since date is in column 1)
         row_data = [
             weekday,
             start_time,
@@ -214,7 +221,7 @@ def create_excel_export(
             session.get("learning_method", "")
         ]
         
-        for col_num, value in enumerate(row_data, 2):  # Start from column 2
+        for col_num, value in enumerate(row_data, 2):
             cell = ws_plan.cell(row=row_num, column=col_num, value=value)
             cell.border = border
             if col_num in [3, 4]:  # Time columns
@@ -263,11 +270,8 @@ def create_excel_export(
         cell = ws_ln.cell(row=row_num, column=2, value=ln_type)
         cell.border = border
         
-        # Write Deadline with proper date format
-        cell = ws_ln.cell(row=row_num, column=3, value=deadline)
-        cell.border = border
-        if deadline:
-            cell.number_format = 'DD.MM.YYYY'
+        # Write Deadline with proper date format using helper
+        set_date_cell(ws_ln.cell(row=row_num, column=3), deadline)
         
         # Write remaining data
         remaining_data = [
@@ -305,17 +309,9 @@ def create_excel_export(
         start_date = absence.get("start_date")
         end_date = absence.get("end_date")
         
-        # Write start date with proper format
-        cell = ws_abs.cell(row=row_num, column=1, value=start_date)
-        cell.border = border
-        if start_date:
-            cell.number_format = 'DD.MM.YYYY'
-        
-        # Write end date with proper format
-        cell = ws_abs.cell(row=row_num, column=2, value=end_date)
-        cell.border = border
-        if end_date:
-            cell.number_format = 'DD.MM.YYYY'
+        # Write start and end dates with proper format using helper
+        set_date_cell(ws_abs.cell(row=row_num, column=1), start_date)
+        set_date_cell(ws_abs.cell(row=row_num, column=2), end_date)
         
         # Write label
         cell = ws_abs.cell(row=row_num, column=3, value=absence.get("label", ""))

@@ -252,4 +252,4 @@ def load_test_data_into_session_state(st):
     """
     )
 
-    st.info("💡 Gehe jetzt zu **'Plan erstellen'** um den Lernplan zu generieren!")
+    st.info("💡 Wechsle jetzt zur **Lernplan**-Seite, um deinen KI-Lernplan zu generieren!")

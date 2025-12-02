@@ -155,6 +155,14 @@ def create_excel_export(
         bottom=Side(style='thin')
     )
     
+    def set_date_cell(cell, date_value, apply_border=True):
+        """Helper to format a cell as a date with DD.MM.YYYY format."""
+        cell.value = date_value
+        if date_value:
+            cell.number_format = 'DD.MM.YYYY'
+        if apply_border:
+            cell.border = border
+    
     # Sheet 1: Lernplan (Study Sessions)
     ws_plan = wb.active
     ws_plan.title = "Lernplan"
@@ -183,8 +191,9 @@ def create_excel_export(
         except:
             pass
         
-        # Get weekday
+        # Parse date and get weekday
         weekday = ""
+        session_date = None
         try:
             session_date = datetime.fromisoformat(date_str).date()
             weekday_en = session_date.strftime("%A")
@@ -192,9 +201,16 @@ def create_excel_export(
         except:
             pass
         
-        # Write row
+        # Write date cell with proper Excel date format using helper
+        date_cell = ws_plan.cell(row=row_num, column=1)
+        if session_date:
+            set_date_cell(date_cell, session_date)
+        else:
+            date_cell.value = date_str
+            date_cell.border = border
+        
+        # Write remaining data (start from column 2 since date is in column 1)
         row_data = [
-            date_str,
             weekday,
             start_time,
             end_time,
@@ -205,7 +221,7 @@ def create_excel_export(
             session.get("learning_method", "")
         ]
         
-        for col_num, value in enumerate(row_data, 1):
+        for col_num, value in enumerate(row_data, 2):
             cell = ws_plan.cell(row=row_num, column=col_num, value=value)
             cell.border = border
             if col_num in [3, 4]:  # Time columns
@@ -236,17 +252,29 @@ def create_excel_export(
         if exam_format and hasattr(exam_format, "value"):
             exam_format = exam_format.value
         
-        # Serialize deadline
+        # Get type as string
+        ln_type = ln.get("type", "")
+        if hasattr(ln_type, "value"):
+            ln_type = ln_type.value
+        
+        # Get deadline as date object
         deadline = ln.get("deadline")
-        if deadline and hasattr(deadline, "isoformat"):
-            deadline = deadline.isoformat()
         
         topics_str = ", ".join(ln.get("topics", []))
         
-        row_data = [
-            ln.get("title", ""),
-            ln.get("type", ""),
-            deadline,
+        # Write Title
+        cell = ws_ln.cell(row=row_num, column=1, value=ln.get("title", ""))
+        cell.border = border
+        
+        # Write Type
+        cell = ws_ln.cell(row=row_num, column=2, value=ln_type)
+        cell.border = border
+        
+        # Write Deadline with proper date format using helper
+        set_date_cell(ws_ln.cell(row=row_num, column=3), deadline)
+        
+        # Write remaining data
+        remaining_data = [
             ln.get("module", ""),
             topics_str,
             ln.get("priority", 3),
@@ -255,7 +283,7 @@ def create_excel_export(
             ln.get("exam_details", "")
         ]
         
-        for col_num, value in enumerate(row_data, 1):
+        for col_num, value in enumerate(remaining_data, 4):
             cell = ws_ln.cell(row=row_num, column=col_num, value=value)
             cell.border = border
             if col_num in [6, 7]:  # Priority and Effort
@@ -281,20 +309,13 @@ def create_excel_export(
         start_date = absence.get("start_date")
         end_date = absence.get("end_date")
         
-        if start_date and hasattr(start_date, "isoformat"):
-            start_date = start_date.isoformat()
-        if end_date and hasattr(end_date, "isoformat"):
-            end_date = end_date.isoformat()
+        # Write start and end dates with proper format using helper
+        set_date_cell(ws_abs.cell(row=row_num, column=1), start_date)
+        set_date_cell(ws_abs.cell(row=row_num, column=2), end_date)
         
-        row_data = [
-            start_date,
-            end_date,
-            absence.get("label", "")
-        ]
-        
-        for col_num, value in enumerate(row_data, 1):
-            cell = ws_abs.cell(row=row_num, column=col_num, value=value)
-            cell.border = border
+        # Write label
+        cell = ws_abs.cell(row=row_num, column=3, value=absence.get("label", ""))
+        cell.border = border
     
     for col in range(1, len(abs_headers) + 1):
         ws_abs.column_dimensions[get_column_letter(col)].width = 15
@@ -331,27 +352,32 @@ def create_excel_export(
     ws_summary = wb.create_sheet("Übersicht")
     ws_summary.sheet_properties.tabColor = "FFD700"  # Golden tab
     
-    summary_data = [
-        ["Lernplan-Übersicht", ""],
-        ["", ""],
-        ["Zeitraum", ""],
-        ["Start", study_start.isoformat() if study_start else ""],
-        ["Ende", study_end.isoformat() if study_end else ""],
-        ["", ""],
-        ["Statistiken", ""],
-        ["Gesamt Lernsessions", len(plan)],
-        ["Gesamt Lerntage", len(set(s.get("date", "") for s in plan))],
-        ["Anzahl Module", len(set(s.get("module", "") for s in plan))],
-        ["Anzahl Leistungsnachweise", len(leistungsnachweise)],
-        ["Anzahl Abwesenheiten", len(absences)],
-        ["Anzahl Verpflichtungen", len(busy_times)],
-        ["", ""],
-        ["Exportiert am", datetime.now().strftime("%d.%m.%Y %H:%M:%S")],
+    # Write summary data with proper formatting
+    summary_rows = [
+        ("Lernplan-Übersicht", "", "header"),
+        ("", "", "empty"),
+        ("Zeitraum", "", "header"),
+        ("Start", study_start, "date"),
+        ("Ende", study_end, "date"),
+        ("", "", "empty"),
+        ("Statistiken", "", "header"),
+        ("Gesamt Lernsessions", len(plan), "number"),
+        ("Gesamt Lerntage", len(set(s.get("date", "") for s in plan)), "number"),
+        ("Anzahl Module", len(set(s.get("module", "") for s in plan)), "number"),
+        ("Anzahl Leistungsnachweise", len(leistungsnachweise), "number"),
+        ("Anzahl Abwesenheiten", len(absences), "number"),
+        ("Anzahl Verpflichtungen", len(busy_times), "number"),
+        ("", "", "empty"),
+        ("Exportiert am", datetime.now().strftime("%d.%m.%Y %H:%M:%S"), "text"),
     ]
     
-    for row_num, (label, value) in enumerate(summary_data, 1):
+    for row_num, (label, value, value_type) in enumerate(summary_rows, 1):
         cell_a = ws_summary.cell(row=row_num, column=1, value=label)
         cell_b = ws_summary.cell(row=row_num, column=2, value=value)
+        
+        # Format date cells
+        if value_type == "date" and value:
+            cell_b.number_format = 'DD.MM.YYYY'
         
         if label in ["Lernplan-Übersicht", "Zeitraum", "Statistiken"]:
             cell_a.font = Font(bold=True, size=14)

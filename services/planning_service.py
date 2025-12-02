@@ -82,6 +82,8 @@ def calculate_free_slots_from_session(
 
     rest_days = preferences.get("rest_days", [])
     max_hours_day = preferences.get("max_hours_day", 8)
+    max_hours_week = preferences.get("max_hours_week", 0)
+    min_session_duration = preferences.get("min_session_duration", 15) / 60.0
 
     # Determine time boundaries based on preferences
     preferred_times = preferences.get("preferred_times_of_day", [])
@@ -108,6 +110,8 @@ def calculate_free_slots_from_session(
         absences=converted_absences,
         rest_days=converted_rest_days,
         max_hours_day=max_hours_day,
+        max_hours_week=max_hours_week,
+        min_session_duration=min_session_duration,
         earliest_study_time=earliest_study_time,
         latest_study_time=latest_study_time,
     )

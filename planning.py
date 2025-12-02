@@ -18,6 +18,8 @@ def calculate_free_slots(
     absences: List[Dict[str, Any]],
     rest_days: List[str],
     max_hours_day: float,
+    max_hours_week: float,
+    min_session_duration: float,
     earliest_study_time: time,
     latest_study_time: time,
 ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:

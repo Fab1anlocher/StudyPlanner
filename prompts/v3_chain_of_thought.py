@@ -1,17 +1,16 @@
 """
 VERSION 3: CHAIN-OF-THOUGHT (LIGHT)
 Prompt, der die KI zu strukturiertem, mehrstufigem Denken anregt,
-aber nach außen nur eine kurze Planungszusammenfassung + JSON ausgibt.
+aber nach aussen nur eine kurze Planungszusammenfassung + JSON ausgibt.
 """
 
 import json
-
 
 def get_system_prompt() -> str:
     """
     System-Prompt mit strukturiertem Reasoning und expliziten Schritten.
     """
-    return """Du bist ein hochqualifizierter Studienplan-Experte an Schweizer Hochschulen.
+    return """Du bist ein hochqualifizierter und gelernter Studienplan-Experte an Schweizer Hochschulen.
 
 AUFGABE:
 Erstelle aus den Studentendaten einen realistischen, effizienten und umsetzbaren Lernplan.
@@ -86,26 +85,43 @@ def build_user_prompt(data: dict) -> str:
     Regt strukturiertes Denken an und verlangt anschließend
     eine kurze Planungszusammenfassung + JSON.
     """
-    semester_start = data.get('semester_start')
-    semester_end = data.get('semester_end')
-    leistungsnachweise = data.get('leistungsnachweise', [])
-    free_slots = data.get('free_slots', [])
-    preferences = data.get('preferences', {})
+    semester_start = data.get("semester_start")
+    semester_end = data.get("semester_end")
+    leistungsnachweise = data.get("leistungsnachweise", [])
+    free_slots = data.get("free_slots", [])
+    preferences = data.get("preferences", {})
+    absences = data.get("absences", [])
+    busy_times = data.get("busy_times", [])
 
     # Konvertiere date-Objekte zu ISO-Strings
     ln_serializable = []
     for ln in leistungsnachweise:
         ln_copy = ln.copy()
-        if 'deadline' in ln_copy and hasattr(ln_copy['deadline'], 'isoformat'):
-            ln_copy['deadline'] = ln_copy['deadline'].isoformat()
+        if "deadline" in ln_copy and hasattr(ln_copy["deadline"], "isoformat"):
+            ln_copy["deadline"] = ln_copy["deadline"].isoformat()
+        # Konvertiere exam_format Enum zu String
+        if "exam_format" in ln_copy and ln_copy["exam_format"] is not None:
+            if hasattr(ln_copy["exam_format"], "value"):
+                ln_copy["exam_format"] = ln_copy["exam_format"].value
         ln_serializable.append(ln_copy)
 
     slots_serializable = []
     for slot in free_slots:
         slot_copy = slot.copy()
-        if 'date' in slot_copy and hasattr(slot_copy['date'], 'isoformat'):
-            slot_copy['date'] = slot_copy['date'].isoformat()
+        if "date" in slot_copy and hasattr(slot_copy["date"], "isoformat"):
+            slot_copy["date"] = slot_copy["date"].isoformat()
         slots_serializable.append(slot_copy)
+
+    absences_serializable = []
+    for absence in absences:
+        absence_copy = absence.copy()
+        if "start_date" in absence_copy and hasattr(absence_copy["start_date"], "isoformat"):
+            absence_copy["start"] = absence_copy["start_date"].isoformat()
+            del absence_copy["start_date"]
+        if "end_date" in absence_copy and hasattr(absence_copy["end_date"], "isoformat"):
+            absence_copy["end"] = absence_copy["end_date"].isoformat()
+            del absence_copy["end_date"]
+        absences_serializable.append(absence_copy)
 
     return f"""
 Analysiere die folgenden Studentendaten und erstelle einen Lernplan.
@@ -127,6 +143,19 @@ VERFÜGBARE STUDY-SLOTS:
 
 LERNPRÄFERENZEN:
 {json.dumps(preferences, ensure_ascii=False, indent=2)}
+
+ABWESENHEITEN (Perioden in denen NICHT gelernt werden kann):
+Die Gründe geben wichtigen Kontext für die Planung:
+- "Urlaub" → Komplette Erholung, keine Vorbereitung
+- "Konferenz" → Intensivere Lernphasen davor/danach möglich
+{json.dumps(absences_serializable, ensure_ascii=False, indent=2)}
+
+REGELMÄSSIGE VERPFLICHTUNGEN (wiederkehrende belegte Zeiten):
+Diese Zeiten sind NICHT zum Lernen verfügbar, aber der Kontext ist wichtig:
+- "Arbeit/Nebenjob" → Danach evtl. müde, weniger konzentriert
+- "Vorlesung Marketing" → Thematisch verknüpft - kurz danach Marketing lernen ist sinnvoll
+- "Sport/Fitnessstudio" → Direkt davor/danach lernen vermeiden (Energie!)
+{json.dumps(busy_times, ensure_ascii=False, indent=2)}
 
 ARBEITE GEMÄSS DEM VORGEGEBENEN SCHRITT-FÜR-SCHRITT-PROZESS AUS DEM SYSTEM-PROMPT.
 

@@ -19,14 +19,14 @@ AVAILABLE_VERSIONS = {
     "v1_zero_shot": "V1: Zero-Shot (Baseline)",
     "v2_few_shot": "V2: Few-Shot (mit Beispielen)",
     "v3_chain_of_thought": "V3: Chain-of-Thought (Reasoning)",
-    "v4_few_shot_cot": "V4: Few-Shot + CoT (Hybrid)"
+    "v4_few_shot_cot": "V4: Few-Shot + CoT (Hybrid)",
 }
 
 
 def get_active_prompts():
     """
     Gibt die aktive Prompt-Version zurück.
-    
+
     Returns:
         tuple: (get_system_prompt, build_user_prompt) Funktionen
     """
@@ -40,14 +40,14 @@ def get_active_prompts():
         from prompts.v4_few_shot_cot import get_system_prompt, build_user_prompt
     else:
         raise ValueError(f"Unknown prompt version: {ACTIVE_PROMPT_VERSION}")
-    
+
     return get_system_prompt, build_user_prompt
 
 
 def set_active_version(version: str):
     """
     Setzt die aktive Prompt-Version (für Session State).
-    
+
     Args:
         version (str): Name der Version (z.B. "v2_few_shot")
     """

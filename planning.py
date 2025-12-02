@@ -8,10 +8,7 @@ This module contains no Streamlit dependencies and can be tested independently.
 from datetime import datetime, date, time, timedelta
 from typing import List, Tuple, Dict, Any, Optional
 
-
-# Weekday mapping constants
-WEEKDAY_MAP_EN = {0: "monday", 1: "tuesday", 2: "wednesday", 3: "thursday", 4: "friday", 5: "saturday", 6: "sunday"}
-WEEKDAY_MAP_DE = {0: "Montag", 1: "Dienstag", 2: "Mittwoch", 3: "Donnerstag", 4: "Freitag", 5: "Samstag", 6: "Sonntag"}
+from constants import WEEKDAY_INDEX_TO_EN, WEEKDAY_INDEX_TO_DE
 
 
 def calculate_free_slots(
@@ -22,11 +19,11 @@ def calculate_free_slots(
     rest_days: List[str],
     max_hours_day: float,
     earliest_study_time: time,
-    latest_study_time: time
+    latest_study_time: time,
 ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
     """
     Calculate available time slots for studying based on user constraints.
-    
+
     Args:
         study_start: Start date of the study period
         study_end: End date of the study period
@@ -36,149 +33,152 @@ def calculate_free_slots(
         max_hours_day: Maximum study hours allowed per day
         earliest_study_time: Earliest time to start studying each day
         latest_study_time: Latest time to end studying each day
-    
+
     Returns:
         Tuple of (free_slots_list, error_message)
         - free_slots_list: List of dicts with date, day, start_time, end_time
         - error_message: String error if validation fails, None otherwise
     """
-    
+
     # Validation
     if not study_start or not study_end:
         return None, "Semester-Start und Semester-Ende müssen gesetzt sein."
-    
+
     if study_start >= study_end:
         return None, "Semester-Start muss vor Semester-Ende liegen."
-    
+
     # Build absence lookup for quick checks
     absence_lookup = set()
     for absence in absences:
         absence_start_date = absence.get("start")
         absence_end_date = absence.get("end")
-        
+
         if absence_start_date and absence_end_date:
             current_date = absence_start_date
             while current_date <= absence_end_date:
                 absence_lookup.add(current_date)
                 current_date += timedelta(days=1)
-    
+
     free_slots = []
     current_date = study_start
-    
+
     # Process each day in the semester
     while current_date <= study_end:
         weekday_index = current_date.weekday()
-        weekday_name = WEEKDAY_MAP_EN[weekday_index]
-        
+        weekday_name = WEEKDAY_INDEX_TO_EN[weekday_index]
+
         # Skip rest days
         if weekday_name in rest_days:
             current_date += timedelta(days=1)
             continue
-        
+
         # Skip absence days
         if current_date in absence_lookup:
             current_date += timedelta(days=1)
             continue
-        
+
         # Start with the full day as a free slot (from earliest to latest study time)
         free_intervals = [(earliest_study_time, latest_study_time)]
-        
+
         # Subtract all busy times for this weekday
         for busy in busy_times:
             if busy.get("day") == weekday_name:
                 busy_start = busy.get("start")
                 busy_end = busy.get("end")
-                
+
                 if busy_start and busy_end:
                     # Apply busy time to all current free intervals
                     new_intervals = []
                     for free_start, free_end in free_intervals:
-                        remaining = subtract_time_interval(free_start, free_end, busy_start, busy_end)
+                        remaining = subtract_time_interval(
+                            free_start, free_end, busy_start, busy_end
+                        )
                         new_intervals.extend(remaining)
                     free_intervals = new_intervals
-        
+
         # Truncate to max hours per day
         free_intervals = truncate_intervals_to_max_hours(free_intervals, max_hours_day)
-        
+
         # Add valid intervals to result
         for start_time, end_time in free_intervals:
-            free_slots.append({
-                "date": current_date,
-                "day": WEEKDAY_MAP_DE[weekday_index],
-                "start_time": start_time,
-                "end_time": end_time
-            })
-        
+            free_slots.append(
+                {
+                    "date": current_date,
+                    "day": WEEKDAY_INDEX_TO_DE[weekday_index],
+                    "start_time": start_time,
+                    "end_time": end_time,
+                }
+            )
+
         current_date += timedelta(days=1)
-    
+
     return free_slots, None
 
 
 def subtract_time_interval(
-    free_start: time,
-    free_end: time,
-    busy_start: time,
-    busy_end: time
+    free_start: time, free_end: time, busy_start: time, busy_end: time
 ) -> List[Tuple[time, time]]:
     """
     Subtract a busy time interval from a free time interval.
-    
+
     Args:
         free_start: Start time of free interval
         free_end: End time of free interval
         busy_start: Start time of busy interval
         busy_end: End time of busy interval
-    
+
     Returns:
         List of remaining free time intervals after subtraction
     """
     # No overlap cases
     if busy_end <= free_start or busy_start >= free_end:
         return [(free_start, free_end)]
-    
+
     # Busy interval completely covers free interval
     if busy_start <= free_start and busy_end >= free_end:
         return []
-    
+
     # Busy interval is in the middle of free interval (split into two)
     if busy_start > free_start and busy_end < free_end:
         return [(free_start, busy_start), (busy_end, free_end)]
-    
+
     # Busy interval overlaps the start of free interval
     if busy_start <= free_start and busy_end < free_end:
         return [(busy_end, free_end)]
-    
+
     # Busy interval overlaps the end of free interval
     if busy_start > free_start and busy_end >= free_end:
         return [(free_start, busy_start)]
-    
+
     # Default: return original (shouldn't reach here)
     return [(free_start, free_end)]
 
 
 def truncate_intervals_to_max_hours(
-    intervals: List[Tuple[time, time]],
-    max_hours: float
+    intervals: List[Tuple[time, time]], max_hours: float
 ) -> List[Tuple[time, time]]:
     """
     Truncate a list of time intervals to not exceed a maximum total duration.
-    
+
     Args:
         intervals: List of (start_time, end_time) tuples
         max_hours: Maximum total hours allowed
-    
+
     Returns:
         Truncated list of intervals
     """
     result = []
     accumulated_hours = 0.0
-    
+
     for start_time, end_time in intervals:
-        interval_hours = (datetime.combine(date.min, end_time) - datetime.combine(date.min, start_time)).total_seconds() / 3600
-        
+        interval_hours = (
+            datetime.combine(date.min, end_time)
+            - datetime.combine(date.min, start_time)
+        ).total_seconds() / 3600
+
         if accumulated_hours >= max_hours:
             break
-        
+
         if accumulated_hours + interval_hours <= max_hours:
             # This interval fits completely
             result.append((start_time, end_time))
@@ -187,9 +187,12 @@ def truncate_intervals_to_max_hours(
             # Partial interval - truncate to fit remaining hours
             remaining_hours = max_hours - accumulated_hours
             remaining_seconds = int(remaining_hours * 3600)
-            new_end_time = (datetime.combine(date.min, start_time) + timedelta(seconds=remaining_seconds)).time()
+            new_end_time = (
+                datetime.combine(date.min, start_time)
+                + timedelta(seconds=remaining_seconds)
+            ).time()
             result.append((start_time, new_end_time))
             accumulated_hours = max_hours
             break
-    
+
     return result

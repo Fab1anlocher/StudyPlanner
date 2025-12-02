@@ -11,26 +11,28 @@ Profil: Max, 22 Jahre, BWL-Student im 5. Semester
 
 from datetime import date, time, timedelta
 
+from constants import LeistungsnachweisType, ExamFormat, DEFAULT_PREFERENCES
+
 
 def get_test_data():
     """
     Gibt vollständige Testdaten für einen busy BWL-Studenten zurück.
-    
+
     Returns:
         dict: Dictionary mit allen Session-State Daten
     """
-    
+
     # Semester-Zeitraum
     study_start = date(2025, 12, 2)
     study_end = date(2026, 1, 14)  # Ende basierend auf letzter Prüfung
-    
+
     # ==========================================
     # LEISTUNGSNACHWEISE (5 Prüfungen/Arbeiten)
     # ==========================================
     leistungsnachweise = [
         {
             "title": "Marketing Grundlagen",
-            "type": "Prüfung",
+            "type": LeistungsnachweisType.PRUEFUNG,
             "deadline": date(2025, 12, 18),
             "module": "Marketing",
             "topics": [
@@ -43,16 +45,16 @@ def get_test_data():
                 "Kapitel 7: Markenmanagement - Brand Equity, Markenpositionierung",
                 "Kapitel 8: Kundenverhalten - Kaufentscheidungsprozess, Einflussfaktoren",
                 "Kapitel 9: Werbung und Kommunikation - AIDA-Modell, Mediaplanung",
-                "Übungsaufgaben und Fallstudien - Praxisbeispiele aus der Schweiz und International"
+                "Übungsaufgaben und Fallstudien - Praxisbeispiele aus der Schweiz und International",
             ],
             "priority": 5,  # Sehr wichtig
-            "effort": 4,     # Hoher Aufwand
-            "exam_format": "Multiple Choice",
-            "exam_details": "60 Minuten, 40 Fragen, Closed Book. Fokus: Definitionen, Konzepte und Modelle auswendig können."
+            "effort": 4,  # Hoher Aufwand
+            "exam_format": ExamFormat.MULTIPLE_CHOICE,
+            "exam_details": "60 Minuten, 40 Fragen, Closed Book. Fokus: Definitionen, Konzepte und Modelle auswendig können.",
         },
         {
             "title": "Rechnungswesen Prüfung",
-            "type": "Prüfung", 
+            "type": LeistungsnachweisType.PRUEFUNG,
             "deadline": date(2026, 1, 22),
             "module": "Rechnungswesen",
             "topics": [
@@ -65,16 +67,16 @@ def get_test_data():
                 "Teil 7: Abschreibungen - Lineare, degressive Abschreibung, Buchwert",
                 "Teil 8: Jahresabschluss - Inventur, Rechnungsabgrenzung, Rückstellungen",
                 "Teil 9: Kennzahlenanalyse - Liquidität, Rentabilität, Cash-Flow",
-                "Teil 10: Übungsklausuren - Musterlösungen durcharbeiten, typische Fehler vermeiden"
+                "Teil 10: Übungsklausuren - Musterlösungen durcharbeiten, typische Fehler vermeiden",
             ],
             "priority": 5,
             "effort": 5,  # Sehr hoher Aufwand (Mathefach!)
-            "exam_format": "Rechenaufgaben",
-            "exam_details": "120 Minuten, 6 komplexe Aufgaben, Taschenrechner erlaubt, Formelsammlung (1 A4 Blatt). Fokus: Übungsaufgaben rechnen, Lösungswege verstehen."
+            "exam_format": ExamFormat.RECHENAUFGABEN,
+            "exam_details": "120 Minuten, 6 komplexe Aufgaben, Taschenrechner erlaubt, Formelsammlung (1 A4 Blatt). Fokus: Übungsaufgaben rechnen, Lösungswege verstehen.",
         },
         {
             "title": "Unternehmensführung Präsentation",
-            "type": "Präsentation",
+            "type": LeistungsnachweisType.PRAESENTATION,
             "deadline": date(2025, 12, 28),
             "module": "Unternehmensführung",
             "topics": [
@@ -85,14 +87,14 @@ def get_test_data():
                 "Thema 5: Strategisches Management - SWOT, Porter's Five Forces, Wettbewerbsstrategien",
                 "Thema 6: Unternehmenskultur - Werte, Normen, Symbole, kulturelle Transformation",
                 "Präsentationsvorbereitung - PowerPoint erstellen, Handout, Zeitmanagement (15 Min)",
-                "Praxisbeispiel recherchieren - Schweizer KMU oder internationale Konzerne analysieren"
+                "Praxisbeispiel recherchieren - Schweizer KMU oder internationale Konzerne analysieren",
             ],
             "priority": 4,
-            "effort": 3
+            "effort": 3,
         },
         {
             "title": "VWL Hausarbeit",
-            "type": "Hausarbeit",
+            "type": LeistungsnachweisType.HAUSARBEIT,
             "deadline": date(2026, 1, 8),
             "module": "Volkswirtschaftslehre",
             "topics": [
@@ -104,14 +106,14 @@ def get_test_data():
                 "Hauptteil 5: Konjunkturzyklen - BIP, Inflation, Arbeitslosigkeit, Stabilitätsgesetz",
                 "Hauptteil 6: Internationale Wirtschaft - Aussenhandel, Wechselkurse, Globalisierung",
                 "Schluss: Zusammenfassung und Fazit - Erkenntnisse, Empfehlungen",
-                "Formales: Zitierweise (APA/Harvard), Literaturverzeichnis, Formatierung (15 Seiten)"
+                "Formales: Zitierweise (APA/Harvard), Literaturverzeichnis, Formatierung (15 Seiten)",
             ],
             "priority": 3,
-            "effort": 4
+            "effort": 4,
         },
         {
             "title": "Statistik Projektarbeit",
-            "type": "Projektarbeit",
+            "type": LeistungsnachweisType.PROJEKTARBEIT,
             "deadline": date(2026, 1, 14),
             "module": "Statistik",
             "topics": [
@@ -124,123 +126,121 @@ def get_test_data():
                 "Phase 7: SPSS Auswertung - Datenimport, Variablen definieren, Syntax schreiben",
                 "Phase 8: Interpretation der Ergebnisse - Statistische vs. praktische Signifikanz",
                 "Phase 9: Projektbericht schreiben - Methodik, Ergebnisse, Diskussion (20 Seiten)",
-                "Phase 10: Präsentation vorbereiten - Kernerkenntnisse visualisieren, Vortrag üben (10 Min)"
+                "Phase 10: Präsentation vorbereiten - Kernerkenntnisse visualisieren, Vortrag üben (10 Min)",
             ],
             "priority": 4,
-            "effort": 5
-        }
+            "effort": 5,
+        },
     ]
-    
+
     # ==========================================
     # BELEGTE ZEITEN (Arbeit, Vorlesungen, Fussball)
     # ==========================================
     # Format: Wiederkehrende wöchentliche Termine
     busy_times = [
         {
-            'label': 'Arbeit (Teilzeit-Job)',
-            'days': ['Monday', 'Tuesday'],
-            'start': '09:00',
-            'end': '17:00'
+            "label": "Arbeit (Teilzeit-Job)",
+            "days": ["Monday", "Tuesday"],
+            "start": "09:00",
+            "end": "17:00",
         },
         {
-            'label': 'Fussballtraining',
-            'days': ['Monday', 'Wednesday'],
-            'start': '18:30',
-            'end': '20:30'
+            "label": "Fussballtraining",
+            "days": ["Monday", "Wednesday"],
+            "start": "18:30",
+            "end": "20:30",
         },
         {
-            'label': 'Vorlesungen (Marketing, VWL)',
-            'days': ['Wednesday'],
-            'start': '08:00',
-            'end': '12:00'
+            "label": "Vorlesungen (Marketing, VWL)",
+            "days": ["Wednesday"],
+            "start": "08:00",
+            "end": "12:00",
         },
         {
-            'label': 'Vorlesungen (Rechnungswesen, Statistik)',
-            'days': ['Thursday'],
-            'start': '08:00',
-            'end': '13:00'
+            "label": "Vorlesungen (Rechnungswesen, Statistik)",
+            "days": ["Thursday"],
+            "start": "08:00",
+            "end": "13:00",
         },
         {
-            'label': 'Vorlesung (Unternehmensführung)',
-            'days': ['Friday'],
-            'start': '09:00',
-            'end': '12:00'
+            "label": "Vorlesung (Unternehmensführung)",
+            "days": ["Friday"],
+            "start": "09:00",
+            "end": "12:00",
         },
         {
-            'label': 'Freunde treffen / Sport',
-            'days': ['Saturday'],
-            'start': '10:00',
-            'end': '13:00'
-        }
+            "label": "Freunde treffen / Sport",
+            "days": ["Saturday"],
+            "start": "10:00",
+            "end": "13:00",
+        },
     ]
-    
+
     # ==========================================
     # FERIEN & ABWESENHEITEN
     # ==========================================
     absences = [
         {
-            'label': 'Weihnachtsferien',
-            'start_date': date(2025, 12, 20),
-            'end_date': date(2026, 1, 5),
-            'description': 'Zuhause bei Familie'
+            "label": "Weihnachtsferien in New York",
+            "start_date": date(2025, 12, 20),
+            "end_date": date(2026, 1, 5),
+            "description": "Zuhause bei Familie",
         },
-        {
-            'label': 'Kurztrip Berlin',
-            'start_date': date(2025, 10, 20),
-            'end_date': date(2025, 10, 22),
-            'description': 'Städtetrip mit Freunden'
-        }
     ]
-    
+
     # ==========================================
     # PRÄFERENZEN
     # ==========================================
     preferences = {
-        'spacing': True,           # Spaced Repetition - Ja!
-        'interleaving': True,      # Fächer mischen - Ja!
-        'deep_work': True,         # Längere Deep-Work Sessions
-        'short_sessions': False,   # Keine kurzen Sessions bevorzugt
-        'rest_days': ['Sonntag'],  # Sonntag = Ruhetag (DEUTSCH!)
-        'max_hours_day': 5,        # Max 5h Lernen pro Tag (ist schon busy!)
-        'max_hours_week': 25,      # Max 25h pro Woche
-        'min_session_duration': 90,  # Mindestens 90 Min Sessions
-        'earliest_study_time': '08:00',
-        'latest_study_time': '22:00',
-        'preferred_times_of_day': ['afternoon', 'evening']  # Nachmittag/Abend bevorzugt
+        "spacing": True,  # Spaced Repetition - Ja!
+        "interleaving": True,  # Fächer mischen - Ja!
+        "deep_work": True,  # Längere Deep-Work Sessions
+        "short_sessions": False,  # Keine kurzen Sessions bevorzugt
+        "rest_days": ["Sonntag"],  # Sonntag = Ruhetag (DEUTSCH!)
+        "max_hours_day": 5,  # Max 5h Lernen pro Tag (ist schon busy!)
+        "max_hours_week": 25,  # Max 25h pro Woche
+        "min_session_duration": 90,  # Mindestens 90 Min Sessions
+        "earliest_study_time": "08:00",
+        "latest_study_time": "22:00",
+        "preferred_times_of_day": [
+            "afternoon",
+            "evening",
+        ],  # Nachmittag/Abend bevorzugt
     }
-    
+
     # ==========================================
     # KOMPLETTER SESSION STATE
     # ==========================================
     return {
-        'study_start': study_start,
-        'study_end': study_end,
-        'leistungsnachweise': leistungsnachweise,
-        'busy_times': busy_times,
-        'absences': absences,
-        'preferences': preferences,
+        "study_start": study_start,
+        "study_end": study_end,
+        "leistungsnachweise": leistungsnachweise,
+        "busy_times": busy_times,
+        "absences": absences,
+        "preferences": preferences,
         # UI State
-        'current_page': 'setup',
-        'plan_generated': False,
-        'study_plan': None
+        "current_page": "setup",
+        "plan_generated": False,
+        "study_plan": None,
     }
 
 
 def load_test_data_into_session_state(st):
     """
     Lädt Test-Daten direkt in den Streamlit Session State.
-    
+
     Args:
         st: Streamlit module
     """
     test_data = get_test_data()
-    
+
     # Alle Daten in Session State laden
     for key, value in test_data.items():
         st.session_state[key] = value
-    
+
     # Success Message
-    st.success("""
+    st.success(
+        """
     ✅ **Test-Daten geladen!**
     
     **Profil: Max, 22 Jahre, BWL-Student**
@@ -249,6 +249,7 @@ def load_test_data_into_session_state(st):
     - 📚 Vorlesungen: Mittwoch, Donnerstag, Freitag
     - 🏖️ Ferien: Weihnachten (20.12. - 05.01.)
     - 📝 5 Prüfungen/Arbeiten im Semester
-    """)
-    
+    """
+    )
+
     st.info("💡 Gehe jetzt zu **'Plan erstellen'** um den Lernplan zu generieren!")

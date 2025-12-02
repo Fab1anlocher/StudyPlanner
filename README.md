@@ -4,7 +4,6 @@
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.29.0-red.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 **Ein intelligenter Lernplaner für Studierende mit KI-Unterstützung (OpenAI & Google Gemini)**
 
@@ -181,21 +180,54 @@ Sidebar → **Prompt Konfiguration** → **"Manuell"**
 
 ```
 StudyPlanner/
-├── app.py                  # 🎯 Hauptanwendung (Streamlit UI)
-├── planning.py             # ⏰ Zeitfenster-Berechnung
-├── display_plan.py         # 🎨 Plan-Visualisierung
-├── pdf_export.py           # 📄 PDF-Export
-├── test_data.py            # 🧪 Test-Daten (BWL-Student)
-├── prompt_config.py        # ⚙️ Prompt-Version Management
+├── app.py                      # 🎯 Hauptanwendung & Router
 │
-├── prompts/                # 📝 Vordefinierte Prompt-Versionen
+├── constants.py                # 📋 Zentrale Konstanten & Enums
+├── config/                     # ⚙️ Konfiguration
+│   ├── __init__.py
+│   └── settings.py            # App-weite Einstellungen
+│
+├── models/                     # 📊 Pydantic Datenmodelle
+│   ├── __init__.py
+│   ├── leistungsnachweis.py   # Prüfungen & Assessments
+│   ├── study_session.py       # Lernsessions & Free Slots
+│   ├── busy_time.py           # Belegte Zeiten
+│   ├── absence.py             # Abwesenheiten
+│   └── preferences.py         # Benutzerpräferenzen
+│
+├── services/                   # 🔧 Business Logic Layer
+│   ├── __init__.py
+│   ├── llm_service.py         # LLM Provider Abstraction (OpenAI/Gemini)
+│   ├── planning_service.py    # Zeitfenster-Berechnung
+│   ├── session_manager.py     # Session State Management
+│   └── export_service.py      # PDF/iCal/JSON Export
+│
+├── ui/                         # 🎨 UI Layer
+│   ├── __init__.py
+│   └── pages/
+│       ├── __init__.py
+│       ├── setup_page.py      # Einrichtungs-Seite
+│       ├── plan_page.py       # Lernplan-Seite
+│       └── export_page.py     # Export-Seite
+│
+├── tests/                      # ✅ Unit Tests
+│   ├── __init__.py
+│   ├── conftest.py            # Pytest Fixtures
+│   ├── test_constants.py
+│   ├── test_models.py
+│   ├── test_llm_service.py
+│   ├── test_planning_service.py
+│   ├── test_session_manager.py
+│   └── test_export_service.py
+│
+├── prompts/                    # 📝 Vordefinierte Prompt-Versionen
 │   ├── __init__.py
 │   ├── v1_zero_shot.py
 │   ├── v2_few_shot.py
 │   ├── v3_chain_of_thought.py
 │   └── v4_few_shot_cot.py
 │
-├── prompt_templates/       # 🎨 Experimentelle Templates
+├── prompt_templates/           # 🎨 Experimentelle Templates
 │   ├── README.md
 │   ├── minimal_prompt.json
 │   ├── balanced_prompt.json
@@ -203,12 +235,54 @@ StudyPlanner/
 │   ├── english_prompt.json
 │   └── example_custom_prompt.json
 │
-├── requirements.txt        # 📦 Python Dependencies
-├── .gitignore             # 🚫 Git Exclusions
-├── README.md              # 📖 Diese Datei
-├── PROMPT_TESTING.md      # 🧪 Prompt-Testing Guide
-└── PROJEKTSTRUKTUR.md     # 🏗️ Technische Dokumentation
+├── .streamlit/                 # 🎨 Streamlit Config
+│   └── config.toml
+│
+├── requirements.txt            # 📦 Production Dependencies
+├── requirements-dev.txt        # 🧪 Development Dependencies
+├── pytest.ini                  # ⚙️ Pytest Configuration
+├── .coveragerc                # 📊 Coverage Configuration
+├── .gitignore                 # 🚫 Git Exclusions
+└── README.md                  # 📖 Diese Datei
 ```
+
+### 🏗️ Architektur-Übersicht
+
+```
+┌─────────────────────────────────────────────┐
+│           Streamlit UI Layer                │
+│  (ui/pages/setup|plan|export_page.py)      │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│         Service Layer (Business Logic)      │
+│  ┌──────────────────────────────────────┐  │
+│  │ LLM Service (OpenAI/Gemini Adapter)  │  │
+│  ├──────────────────────────────────────┤  │
+│  │ Planning Service (Time Calculations) │  │
+│  ├──────────────────────────────────────┤  │
+│  │ Session Manager (State Management)   │  │
+│  ├──────────────────────────────────────┤  │
+│  │ Export Service (PDF/iCal/JSON)       │  │
+│  └──────────────────────────────────────┘  │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│      Data Layer (Pydantic Models)           │
+│  Leistungsnachweis | StudySession | ...     │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│         Constants & Configuration           │
+│    Enums | Formats | Settings               │
+└─────────────────────────────────────────────┘
+```
+
+**Layer-Verantwortlichkeiten:**
+- **UI Layer**: Streamlit Widgets, User Input, Display
+- **Service Layer**: Business Logic, API Calls, Berechnungen
+- **Data Layer**: Type Safety, Validation, Schema
+- **Config Layer**: Constants, Settings, Environment
 
 ---
 
@@ -278,26 +352,10 @@ Prüfe Nutzung: [ai.google.dev](https://ai.google.dev/)
 - **LLM-Provider**: 
   - [OpenAI](https://openai.com/) (GPT-4o, GPT-4o-mini, GPT-3.5-turbo)
   - [Google Gemini](https://ai.google.dev/) (gemini-1.5-flash, gemini-1.5-pro)
-- **PDF-Export**: [fpdf2](https://pyfpdf.github.io/fpdf2/)
+- **Data Validation**: [Pydantic](https://docs.pydantic.dev/) 2.12.5
+- **Export Formate**: 
+  - PDF via [fpdf2](https://pyfpdf.github.io/fpdf2/)
 - **Sprache**: Python 3.8+
-
----
-
-## 🤝 Contributing
-
-Dieses Projekt wurde als Studienprojekt entwickelt. Contributions sind willkommen!
-
-1. Fork das Repository
-2. Erstelle einen Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit deine Änderungen (`git commit -m 'Add some AmazingFeature'`)
-4. Push zum Branch (`git push origin feature/AmazingFeature`)
-5. Öffne einen Pull Request
-
----
-
-## 📝 Lizenz
-
-Dieses Projekt steht unter der MIT-Lizenz - siehe [LICENSE](LICENSE) für Details.
 
 ---
 
@@ -306,23 +364,6 @@ Dieses Projekt steht unter der MIT-Lizenz - siehe [LICENSE](LICENSE) für Detail
 - **Locher, Wirth & Heiniger**
 - Projekt: StudyPlanner
 - GitHub: [@Fab1anlocher](https://github.com/Fab1anlocher)
-
----
-
-## 🙏 Danksagungen
-
-- Streamlit Team für das fantastische Framework
-- OpenAI & Google für die LLM APIs
-- Alle Beta-Tester für wertvolles Feedback
-
----
-
-## 📞 Support
-
-Bei Fragen oder Problemen:
-- 🐛 [Issue erstellen](https://github.com/Fab1anlocher/StudyPlanner/issues)
-- 📧 Kontaktiere die Entwickler
-- 📖 Lies die [Dokumentation](#dokumentation)
 
 ---
 

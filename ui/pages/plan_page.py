@@ -6,6 +6,9 @@ Ermöglicht das Erstellen und Anpassen des KI-gestützten Lernplans
 import streamlit as st
 from datetime import datetime
 
+# Import constants for weekday handling
+from constants import WEEKDAY_NAMES_DE
+
 # Import display functions
 from ui.components.display_plan import display_plan_views
 
@@ -280,26 +283,11 @@ def show_plan_page(calculate_free_slots_func, generate_plan_via_ai_func):
                         new_busy_label = st.text_input(
                             "Bezeichnung", placeholder="z.B. Vorlesung, Meeting"
                         )
+                        # Use German weekday names for consistency with setup_page
                         new_busy_days = st.multiselect(
                             "Tage",
-                            [
-                                "Monday",
-                                "Tuesday",
-                                "Wednesday",
-                                "Thursday",
-                                "Friday",
-                                "Saturday",
-                                "Sunday",
-                            ],
-                            format_func=lambda x: {
-                                "Monday": "Montag",
-                                "Tuesday": "Dienstag",
-                                "Wednesday": "Mittwoch",
-                                "Thursday": "Donnerstag",
-                                "Friday": "Freitag",
-                                "Saturday": "Samstag",
-                                "Sunday": "Sonntag",
-                            }[x],
+                            WEEKDAY_NAMES_DE,
+                            help="Wähle alle Tage aus, an denen diese belegte Zeit auftritt",
                         )
 
                     with col2:

@@ -56,7 +56,6 @@ __all__ = [
     "has_plan",
     # Export Service
     "create_pdf_export",
-    "create_ical_export",
-    "create_json_export",
+    "create_excel_export",
     "get_plan_statistics",
 ]

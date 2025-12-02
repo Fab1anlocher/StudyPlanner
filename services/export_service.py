@@ -388,8 +388,17 @@ def get_plan_statistics(plan: List[Dict[str, Any]]) -> Dict[str, Any]:
             "unique_dates": 0,
         }
 
+    # Single pass through the plan to collect all statistics
     total_hours = 0.0
+    modules = set()
+    dates = set()
+    
     for session in plan:
+        # Track unique modules and dates
+        modules.add(session.get("module", ""))
+        dates.add(session.get("date", ""))
+        
+        # Calculate session duration
         try:
             start = datetime.strptime(session.get("start", "00:00"), "%H:%M")
             end = datetime.strptime(session.get("end", "00:00"), "%H:%M")
@@ -398,12 +407,9 @@ def get_plan_statistics(plan: List[Dict[str, Any]]) -> Dict[str, Any]:
         except:
             pass
 
-    unique_modules = len(set(s.get("module", "") for s in plan))
-    unique_dates = len(set(s.get("date", "") for s in plan))
-
     return {
         "total_sessions": len(plan),
         "total_hours": round(total_hours, 1),
-        "unique_modules": unique_modules,
-        "unique_dates": unique_dates,
+        "unique_modules": len(modules),
+        "unique_dates": len(dates),
     }

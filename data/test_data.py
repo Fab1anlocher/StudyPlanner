@@ -38,7 +38,7 @@ def get_fabian_test_data():
 
     # Semester-Zeitraum
     study_start = date(2025, 12, 2)
-    study_end = date(2026, 1, 14)  # Ende basierend auf letzter Prüfung
+    study_end = date(2026, 1, 22)  # Ende basierend auf letzter Prüfung (Rechnungswesen)
 
     # ==========================================
     # LEISTUNGSNACHWEISE (5 Prüfungen/Arbeiten)

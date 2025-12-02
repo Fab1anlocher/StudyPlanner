@@ -77,7 +77,7 @@ def display_plan_views(plan):
 def display_weekly_view(sorted_plan):
     """
     Display study plan grouped by weeks with daily columns.
-    Shows ALL weeks in the semester range, even those without sessions.
+    Shows weeks with navigation (prev/next) for better usability.
     Also displays busy times and absences to show the complete daily schedule.
 
     Args:
@@ -104,14 +104,15 @@ def display_weekly_view(sorted_plan):
 
     # Pre-compute busy times grouped by weekday index (0=Monday, 6=Sunday)
     # This avoids recomputing for every week since busy times are recurring
-    weekday_names_en = [
-        "monday", "tuesday", "wednesday", "thursday",
-        "friday", "saturday", "sunday"
+    # Note: busy times use German weekday names from the UI
+    weekday_names_de = [
+        "montag", "dienstag", "mittwoch", "donnerstag",
+        "freitag", "samstag", "sonntag"
     ]
     busy_times_by_weekday = {i: [] for i in range(7)}
     for busy in busy_times:
         busy_days_lower = {d.lower() for d in busy.get("days", [])}
-        for day_idx, weekday_name in enumerate(weekday_names_en):
+        for day_idx, weekday_name in enumerate(weekday_names_de):
             if weekday_name in busy_days_lower:
                 busy_times_by_weekday[day_idx].append({
                     "label": busy.get("label", "Belegt"),
@@ -173,171 +174,209 @@ def display_weekly_view(sorted_plan):
 
     # Sort weeks chronologically
     sorted_weeks = sorted(weeks.items(), key=lambda x: x[1]["start"])
+    total_weeks = len(sorted_weeks)
 
     # German weekday abbreviations
     day_names_short = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-    # Display each week
-    for week_key, week_data in sorted_weeks:
-        week_start = week_data["start"]
-        week_end = week_data["end"]
-        week_num = week_data["week_number"]
+    # Week navigation state
+    if "current_week_index" not in st.session_state:
+        st.session_state.current_week_index = 0
+    
+    # Ensure index is within bounds
+    if st.session_state.current_week_index >= total_weeks:
+        st.session_state.current_week_index = total_weeks - 1
+    if st.session_state.current_week_index < 0:
+        st.session_state.current_week_index = 0
 
-        st.markdown(
-            f"### Woche {week_num} ({week_start.strftime('%d.%m.')} – {week_end.strftime('%d.%m.%Y')})"
+    # Navigation controls
+    nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns([1, 1, 2, 1, 1])
+    
+    with nav_col1:
+        if st.button("⏮️ Erste", key="first_week", use_container_width=True, disabled=st.session_state.current_week_index == 0):
+            st.session_state.current_week_index = 0
+            st.rerun()
+    
+    with nav_col2:
+        if st.button("◀️ Zurück", key="prev_week", use_container_width=True, disabled=st.session_state.current_week_index == 0):
+            st.session_state.current_week_index -= 1
+            st.rerun()
+    
+    with nav_col3:
+        current_week = st.session_state.current_week_index + 1
+        st.markdown(f"<div style='text-align: center; padding: 8px;'><strong>Woche {current_week} von {total_weeks}</strong></div>", unsafe_allow_html=True)
+    
+    with nav_col4:
+        if st.button("Weiter ▶️", key="next_week", use_container_width=True, disabled=st.session_state.current_week_index >= total_weeks - 1):
+            st.session_state.current_week_index += 1
+            st.rerun()
+    
+    with nav_col5:
+        if st.button("Letzte ⏭️", key="last_week", use_container_width=True, disabled=st.session_state.current_week_index >= total_weeks - 1):
+            st.session_state.current_week_index = total_weeks - 1
+            st.rerun()
+
+    st.markdown("---")
+
+    # Display current week
+    week_key, week_data = sorted_weeks[st.session_state.current_week_index]
+    week_start = week_data["start"]
+    week_end = week_data["end"]
+    week_num = week_data["week_number"]
+
+    st.markdown(
+        f"### 📅 Woche {week_num} ({week_start.strftime('%d.%m.')} - {week_end.strftime('%d.%m.%Y')})"
+    )
+
+    # Group sessions by weekday
+    days_sessions = {i: [] for i in range(7)}  # 0=Monday, 6=Sunday
+
+    for session in week_data["sessions"]:
+        try:
+            session_date = datetime.fromisoformat(session.get("date", "")).date()
+            weekday = session_date.weekday()
+            days_sessions[weekday].append(session)
+        except:
+            continue
+
+    # Check for absences for each day in this week
+    days_absences = {i: [] for i in range(7)}
+    for day_idx in range(7):
+        day_date = week_start + timedelta(days=day_idx)
+        for absence in absences:
+            absence_start = absence.get("start_date")
+            absence_end = absence.get("end_date")
+            if absence_start and absence_end:
+                if absence_start <= day_date <= absence_end:
+                    days_absences[day_idx].append(
+                        absence.get("label", "Abwesenheit")
+                    )
+
+    # Use pre-computed busy times (already grouped by weekday)
+    # Note: Create a shallow copy to avoid potential reference issues
+    days_busy = {i: busy_times_by_weekday[i] for i in range(7)}
+
+    # Check for exams/deadlines on each day using pre-computed lookup (O(1) per day)
+    days_exams = {i: [] for i in range(7)}
+    for day_idx in range(7):
+        day_date = week_start + timedelta(days=day_idx)
+        if day_date in exams_by_date:
+            # Use list copy to avoid modifying original data
+            days_exams[day_idx] = list(exams_by_date[day_date])
+
+    # Sort sessions within each day by start time
+    for day_idx in range(7):
+        days_sessions[day_idx] = sorted(
+            days_sessions[day_idx], key=lambda x: x.get("start", "")
         )
 
-        # Group sessions by weekday
-        days_sessions = {i: [] for i in range(7)}  # 0=Monday, 6=Sunday
+    # Create 7 columns for days of the week
+    cols = st.columns(7)
 
-        for session in week_data["sessions"]:
-            try:
-                session_date = datetime.fromisoformat(session.get("date", "")).date()
-                weekday = session_date.weekday()
-                days_sessions[weekday].append(session)
-            except:
-                continue
-
-        # Check for absences for each day in this week
-        days_absences = {i: [] for i in range(7)}
-        for day_idx in range(7):
+    for day_idx, col in enumerate(cols):
+        with col:
+            # Calculate the actual date for this day
             day_date = week_start + timedelta(days=day_idx)
-            for absence in absences:
-                absence_start = absence.get("start_date")
-                absence_end = absence.get("end_date")
-                if absence_start and absence_end:
-                    if absence_start <= day_date <= absence_end:
-                        days_absences[day_idx].append(
-                            absence.get("label", "Abwesenheit")
-                        )
+            st.markdown(f"**{day_names_short[day_idx]}**")
+            st.caption(day_date.strftime("%d.%m."))
 
-        # Use pre-computed busy times (already grouped by weekday)
-        # Note: Create a shallow copy to avoid potential reference issues
-        days_busy = {i: busy_times_by_weekday[i] for i in range(7)}
+            sessions_today = days_sessions[day_idx]
+            absences_today = days_absences[day_idx]
+            busy_today = days_busy[day_idx]
+            exams_today = days_exams[day_idx]
 
-        # Check for exams/deadlines on each day using pre-computed lookup (O(1) per day)
-        days_exams = {i: [] for i in range(7)}
-        for day_idx in range(7):
-            day_date = week_start + timedelta(days=day_idx)
-            if day_date in exams_by_date:
-                # Use list copy to avoid modifying original data
-                days_exams[day_idx] = list(exams_by_date[day_date])
-
-        # Sort sessions within each day by start time
-        for day_idx in range(7):
-            days_sessions[day_idx] = sorted(
-                days_sessions[day_idx], key=lambda x: x.get("start", "")
-            )
-
-        # Create 7 columns for days of the week
-        cols = st.columns(7)
-
-        for day_idx, col in enumerate(cols):
-            with col:
-                # Calculate the actual date for this day
-                day_date = week_start + timedelta(days=day_idx)
-                st.markdown(f"**{day_names_short[day_idx]}**")
-                st.caption(day_date.strftime("%d.%m."))
-
-                sessions_today = days_sessions[day_idx]
-                absences_today = days_absences[day_idx]
-                busy_today = days_busy[day_idx]
-                exams_today = days_exams[day_idx]
-
-                # Check if day is completely absent (vacation, etc.)
-                if absences_today:
-                    for absence_label in absences_today:
-                        st.markdown(
-                            f"""
-                        <div style="background-color: #ffe6e6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #cc0000;">
-                            <div style="font-size: 0.75em; font-weight: bold; color: #cc0000;">🚫 Ganzer Tag</div>
-                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600;">{absence_label}</div>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
-
-                # Show busy times (job, lectures, etc.)
-                if busy_today:
-                    for busy_item in busy_today:
-                        start = busy_item.get("start", "N/A")
-                        end = busy_item.get("end", "N/A")
-                        label = busy_item.get("label", "Belegt")
-                        label_display = label[:20] + "..." if len(label) > 20 else label
-
-                        st.markdown(
-                            f"""
-                        <div style="background-color: #fff3e6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #ff9900;">
-                            <div style="font-size: 0.75em; font-weight: bold; color: #ff9900;">⛔ {start}–{end}</div>
-                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600; color: #663300;">{label_display}</div>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
-
-                # Show exams/deadlines (IMPORTANT - show first!)
-                if exams_today:
-                    for exam in exams_today:
-                        title = exam.get("title", "Prüfung")
-                        exam_type_raw = exam.get("type", "Prüfung")
-                        # Convert enum to string if needed
-                        exam_type = (
-                            exam_type_raw.value
-                            if hasattr(exam_type_raw, "value")
-                            else exam_type_raw
-                        )
-                        title_display = title[:18] + "..." if len(title) > 18 else title
-
-                        st.markdown(
-                            f"""
-                        <div style="background-color: #ffe6f0; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #cc0066; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="font-size: 0.75em; font-weight: bold; color: #cc0066;">🎯 {exam_type}</div>
-                            <div style="font-size: 0.85em; margin-top: 4px; font-weight: 700; color: #990050;">{title_display}</div>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
-
-                # Show learning sessions
-                if sessions_today:
-                    for session in sessions_today:
-                        # Create a compact card for each session
-                        start = session.get("start", "N/A")
-                        end = session.get("end", "N/A")
-                        module = session.get("module", "Unknown")
-                        topic = session.get("topic", "N/A")
-
-                        # Truncate long titles for display
-                        module_display = (
-                            module[:20] + "..." if len(module) > 20 else module
-                        )
-                        topic_display = topic[:25] + "..." if len(topic) > 25 else topic
-
-                        # Use a container with custom styling
-                        st.markdown(
-                            f"""
-                        <div style="background-color: #e6f3ff; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #0066cc;">
-                            <div style="font-size: 0.75em; font-weight: bold; color: #0066cc;">📖 {start}–{end}</div>
-                            <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600; color: #003366;">{module_display}</div>
-                            <div style="font-size: 0.7em; color: #666; margin-top: 2px;">{topic_display}</div>
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
-
-                # Show message if completely empty day
-                if (
-                    not sessions_today
-                    and not busy_today
-                    and not absences_today
-                    and not exams_today
-                ):
+            # Check if day is completely absent (vacation, etc.)
+            if absences_today:
+                for absence_label in absences_today:
                     st.markdown(
-                        "<div style='color: #999; font-size: 0.75em; font-style: italic; padding: 4px;'>Frei</div>",
+                        f"""
+                    <div style="background-color: #ffe6e6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #cc0000;">
+                        <div style="font-size: 0.75em; font-weight: bold; color: #cc0000;">🚫 Ganzer Tag</div>
+                        <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600;">{absence_label}</div>
+                    </div>
+                    """,
                         unsafe_allow_html=True,
                     )
 
-        st.markdown("---")
+            # Show busy times (job, lectures, etc.)
+            if busy_today:
+                for busy_item in busy_today:
+                    start = busy_item.get("start", "N/A")
+                    end = busy_item.get("end", "N/A")
+                    label = busy_item.get("label", "Belegt")
+                    label_display = label[:20] + "..." if len(label) > 20 else label
+
+                    st.markdown(
+                        f"""
+                    <div style="background-color: #fff3e6; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #ff9900;">
+                        <div style="font-size: 0.75em; font-weight: bold; color: #ff9900;">⛔ {start}-{end}</div>
+                        <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600; color: #663300;">{label_display}</div>
+                    </div>
+                    """,
+                        unsafe_allow_html=True,
+                    )
+
+            # Show exams/deadlines (IMPORTANT - show first!)
+            if exams_today:
+                for exam in exams_today:
+                    title = exam.get("title", "Prüfung")
+                    exam_type_raw = exam.get("type", "Prüfung")
+                    # Convert enum to string if needed
+                    exam_type = (
+                        exam_type_raw.value
+                        if hasattr(exam_type_raw, "value")
+                        else exam_type_raw
+                    )
+                    title_display = title[:18] + "..." if len(title) > 18 else title
+
+                    st.markdown(
+                        f"""
+                    <div style="background-color: #ffe6f0; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #cc0066; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="font-size: 0.75em; font-weight: bold; color: #cc0066;">🎯 {exam_type}</div>
+                        <div style="font-size: 0.85em; margin-top: 4px; font-weight: 700; color: #990050;">{title_display}</div>
+                    </div>
+                    """,
+                        unsafe_allow_html=True,
+                    )
+
+            # Show learning sessions
+            if sessions_today:
+                for session in sessions_today:
+                    # Create a compact card for each session
+                    start = session.get("start", "N/A")
+                    end = session.get("end", "N/A")
+                    module = session.get("module", "Unknown")
+                    topic = session.get("topic", "N/A")
+
+                    # Truncate long titles for display
+                    module_display = (
+                        module[:20] + "..." if len(module) > 20 else module
+                    )
+                    topic_display = topic[:25] + "..." if len(topic) > 25 else topic
+
+                    # Use a container with custom styling
+                    st.markdown(
+                        f"""
+                    <div style="background-color: #e6f3ff; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #0066cc;">
+                        <div style="font-size: 0.75em; font-weight: bold; color: #0066cc;">📖 {start}-{end}</div>
+                        <div style="font-size: 0.8em; margin-top: 4px; font-weight: 600; color: #003366;">{module_display}</div>
+                        <div style="font-size: 0.7em; color: #666; margin-top: 2px;">{topic_display}</div>
+                    </div>
+                    """,
+                        unsafe_allow_html=True,
+                    )
+
+            # Show message if completely empty day
+            if (
+                not sessions_today
+                and not busy_today
+                and not absences_today
+                and not exams_today
+            ):
+                st.markdown(
+                    "<div style='color: #999; font-size: 0.75em; font-style: italic; padding: 4px;'>Frei</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 def display_list_view(sorted_plan):
@@ -385,7 +424,7 @@ def display_list_view(sorted_plan):
             col1, col2 = st.columns([1, 4])
 
             with col1:
-                st.markdown(f"**{start} – {end}**")
+                st.markdown(f"**{start} - {end}**")
 
             with col2:
                 st.markdown(f"**{module}**")

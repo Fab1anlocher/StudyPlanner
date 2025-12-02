@@ -422,26 +422,73 @@ def show_setup_page():
             else:
                 st.error("⚠️ Bitte wähle Start- und Enddatum aus.")
 
-    # Display existing absences
+    # Display existing absences with edit functionality
     if st.session_state.absences:
         st.markdown("**🚫 Deine Abwesenheitsperioden:**")
 
         for idx, absence in enumerate(st.session_state.absences):
-            col1, col2 = st.columns([4, 1])
-
-            with col1:
-                days_count = (absence["end_date"] - absence["start_date"]).days + 1
-                st.write(
-                    f"🔸 **{absence['label']}**: {absence['start_date'].strftime('%d. %b %Y')} → {absence['end_date'].strftime('%d. %b %Y')} ({days_count} Tage)"
-                )
-
-            with col2:
-                if st.button(
-                    "🗑️", key=f"remove_absence_{idx}", use_container_width=True
-                ):
-                    st.session_state.absences.pop(idx)
-                    st.success("Abwesenheit entfernt.")
-                    st.rerun()
+            days_count = (absence["end_date"] - absence["start_date"]).days + 1
+            
+            # Check for conflicts with exams
+            has_conflict = False
+            conflict_exams = []
+            for ln in st.session_state.leistungsnachweise:
+                deadline = ln.get("deadline")
+                if deadline and absence["start_date"] <= deadline <= absence["end_date"]:
+                    has_conflict = True
+                    conflict_exams.append(ln.get("title", "Unbekannt"))
+            
+            with st.expander(
+                f"{'⚠️ ' if has_conflict else ''}🔸 {absence['label']}: {absence['start_date'].strftime('%d.%m.%Y')} - {absence['end_date'].strftime('%d.%m.%Y')} ({days_count} Tage)",
+                expanded=False
+            ):
+                if has_conflict:
+                    st.error(f"⚠️ **Konflikt mit Prüfungen/Abgaben:** {', '.join(conflict_exams)}")
+                
+                # Edit form for this absence
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    new_start = st.date_input(
+                        "Startdatum",
+                        value=absence["start_date"],
+                        format="DD.MM.YYYY",
+                        key=f"edit_absence_start_{idx}",
+                    )
+                    new_label = st.text_input(
+                        "Bezeichnung",
+                        value=absence["label"],
+                        key=f"edit_absence_label_{idx}",
+                    )
+                
+                with col2:
+                    new_end = st.date_input(
+                        "Enddatum",
+                        value=absence["end_date"],
+                        format="DD.MM.YYYY",
+                        key=f"edit_absence_end_{idx}",
+                    )
+                
+                col_save, col_delete = st.columns(2)
+                
+                with col_save:
+                    if st.button("💾 Speichern", key=f"save_absence_{idx}", use_container_width=True):
+                        if new_end >= new_start:
+                            st.session_state.absences[idx] = {
+                                "start_date": new_start,
+                                "end_date": new_end,
+                                "label": new_label if new_label.strip() else "Abwesenheit",
+                            }
+                            st.success("Abwesenheit aktualisiert!")
+                            st.rerun()
+                        else:
+                            st.error("Enddatum muss nach Startdatum liegen.")
+                
+                with col_delete:
+                    if st.button("🗑️ Entfernen", key=f"remove_absence_{idx}", use_container_width=True, type="secondary"):
+                        st.session_state.absences.pop(idx)
+                        st.success("Abwesenheit entfernt.")
+                        st.rerun()
 
         st.info(f"📊 Total Abwesenheitsperioden: {len(st.session_state.absences)}")
     else:

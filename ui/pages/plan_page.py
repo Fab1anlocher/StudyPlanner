@@ -111,6 +111,32 @@ def show_plan_page(calculate_free_slots_func, generate_plan_via_ai_func):
                             "❌ Keine freien Zeitfenster gefunden. Bitte überprüfe deine Einstellungen."
                         )
                     else:
+                        # Calculate total available hours and check against estimated need
+                        total_available_hours = sum(slot.get("hours", 0) for slot in free_slots)
+                        
+                        # Estimate needed hours based on leistungsnachweise
+                        estimated_needed_hours = 0
+                        for ln in st.session_state.leistungsnachweise:
+                            effort = ln.get("effort", 3)
+                            # Estimate: effort 1 = 5h, effort 5 = 25h
+                            estimated_needed_hours += 5 + (effort - 1) * 5
+                        
+                        # Show warning if available hours are less than estimated need
+                        if total_available_hours < estimated_needed_hours:
+                            st.warning(
+                                f"""⚠️ **Hinweis zu Lernzeit-Limits:**
+                                
+Die verfügbare Lernzeit ({total_available_hours:.1f}h) ist möglicherweise geringer als der geschätzte Bedarf ({estimated_needed_hours:.0f}h).
+
+**Mögliche Anpassungen:**
+- Max. Stunden pro Tag/Woche erhöhen
+- Ruhetage reduzieren
+- Abwesenheiten verkürzen
+- Min. Session-Dauer verringern
+
+Der Plan wird dennoch erstellt, aber möglicherweise nicht alle Themen abdecken."""
+                            )
+                        
                         # Generate plan via AI
                         success = generate_plan_via_ai_func()
 

@@ -71,7 +71,9 @@ def generate_plan_via_ai():
     # Validate preconditions
     if not st.session_state.openai_key:
         st.error(
-            "❌ API-Schlüssel fehlt. Bitte konfiguriere ihn auf der Einrichtungs-Seite (OpenAI oder Gemini)."
+            "❌ API-Schlüssel fehlt.\n"
+            "👉 Gehe zu Sidebar → 'Modell Konfiguration' und gib deinen API Key ein.\n"
+            "💡 Tipp: OpenAI Keys beginnen mit 'sk-', Gemini Keys sind 39 Zeichen lang."
         )
         return False
 
@@ -87,7 +89,43 @@ def generate_plan_via_ai():
         )
         return False
 
+    # DEFENSIVE GUARD: Validate semester dates are set
+    # ASSUMPTION: study_start and study_end must be present in session_state
+    if not st.session_state.get("study_start") or not st.session_state.get("study_end"):
+        st.error(
+            "❌ Semester-Zeitraum fehlt. Bitte setze Start- und Enddatum auf der Einrichtungs-Seite."
+        )
+        return False
+
     try:
+        # DEFENSIVE GUARD: Check workload realism before calling LLM
+        # Estimate total hours needed vs available
+        total_hours_available = sum(slot.get("hours", 0) for slot in st.session_state.free_slots)
+        # Rough estimate: effort 1-5 maps to 5-25 hours per leistungsnachweis
+        total_hours_estimated = sum(
+            ln.get("effort", 3) * 5 for ln in st.session_state.leistungsnachweise
+        )
+        
+        if total_hours_available < 1:
+            st.error(
+                "❌ Keine Lernzeit verfügbar. Bitte erhöhe deine freien Zeitfenster oder reduziere belegte Zeiten."
+            )
+            return False
+        
+        utilization = total_hours_estimated / total_hours_available if total_hours_available > 0 else 0
+        
+        if utilization > 1.0:
+            st.warning(
+                f"⚠️ **Warnung:** Geschätzter Lernaufwand ({total_hours_estimated:.0f}h) "
+                f"übersteigt verfügbare Zeit ({total_hours_available:.0f}h) um {(utilization - 1) * 100:.0f}%.\n\n"
+                f"💡 **Empfehlung:** Reduziere Leistungsnachweise oder erhöhe verfügbare Lernzeit."
+            )
+        elif utilization > 0.8:
+            st.info(
+                f"ℹ️ **Hinweis:** Der Plan erfordert ca. {utilization * 100:.0f}% deiner verfügbaren Zeit.\n"
+                f"Dies ist sehr intensiv. Plane Puffer für unvorhergesehene Ereignisse ein."
+            )
+        
         # Prepare data for prompt building
         prompt_data = {
             "semester_start": st.session_state.study_start,
@@ -198,6 +236,59 @@ def generate_plan_via_ai():
         if not isinstance(plan, list):
             st.error("❌ KI-Antwort ist keine gültige Liste von Lerneinheiten.")
             return False
+
+        # DEFENSIVE GUARD: Validate plan is not empty
+        if not plan:
+            st.warning(
+                "⚠️ KI hat einen leeren Plan generiert.\n\n"
+                "💡 **Mögliche Ursachen:**\n"
+                "- Zu wenig freie Zeitfenster verfügbar\n"
+                "- Zeitfenster zu kurz (min. 45 Minuten empfohlen)\n"
+                "- Keine gültigen Lerntermine im Zeitraum\n\n"
+                "**Versuche:** Erhöhe deine verfügbaren Zeitfenster oder reduziere Ruhetage."
+            )
+            return False
+
+        # DEFENSIVE GUARD: Validate first session has required fields
+        required_fields = ["date", "start", "end", "module", "topic", "description"]
+        if not all(field in plan[0] for field in required_fields):
+            st.error(
+                f"❌ KI-Antwort hat ungültiges Format. Fehlende Felder.\n"
+                f"Erwartet: {', '.join(required_fields)}\n"
+                f"Erhalten: {', '.join(plan[0].keys())}"
+            )
+            return False
+
+        # DEFENSIVE GUARD: Validate sessions are within free_slots
+        # This ensures LLM respected the constraint
+        invalid_sessions = []
+        for i, session in enumerate(plan):
+            session_date = session.get("date")
+            session_start = session.get("start")
+            session_end = session.get("end")
+            
+            # Find matching free slot
+            matching_slot = next(
+                (
+                    slot
+                    for slot in st.session_state.free_slots
+                    if str(slot["date"]) == session_date
+                    and slot["start"] <= session_start
+                    and slot["end"] >= session_end
+                ),
+                None,
+            )
+            
+            if not matching_slot:
+                invalid_sessions.append(f"Session {i+1} am {session_date} {session_start}-{session_end}")
+        
+        if invalid_sessions:
+            st.warning(
+                f"⚠️ **Warnung:** {len(invalid_sessions)} Session(s) liegen außerhalb der freien Zeitfenster:\n"
+                + "\n".join(f"- {s}" for s in invalid_sessions[:5])
+                + ("\n- ..." if len(invalid_sessions) > 5 else "")
+                + "\n\n💡 Der Plan wurde trotzdem gespeichert, aber diese Sessions könnten sich mit anderen Verpflichtungen überschneiden."
+            )
 
         # Store in session state
         st.session_state.plan = plan

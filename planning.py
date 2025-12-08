@@ -49,19 +49,34 @@ def calculate_free_slots(
     if study_start >= study_end:
         return None, "Semester-Start muss vor Semester-Ende liegen."
 
+    # DEFENSIVE GUARD: Prevent extreme timeframes (performance & realism)
+    days_difference = (study_end - study_start).days
+    if days_difference > 365:
+        return None, "Planungszeitraum darf maximal 1 Jahr (365 Tage) betragen."
+    
+    if days_difference < 1:
+        return None, "Planungszeitraum muss mindestens 1 Tag betragen."
+
     # Build absence lookup for quick checks
+    # OPTIMIZATION: Build absence lookup set for O(1) membership testing during iteration
     absence_lookup = set()
     for absence in absences:
         absence_start_date = absence.get("start")
         absence_end_date = absence.get("end")
 
         if absence_start_date and absence_end_date:
+            # DEFENSIVE GUARD: Skip invalid absences (end before start)
+            if absence_start_date > absence_end_date:
+                # Log warning but continue (non-breaking)
+                continue
+            
             current_date = absence_start_date
             while current_date <= absence_end_date:
                 absence_lookup.add(current_date)
                 current_date += timedelta(days=1)
 
     # Pre-group busy times by weekday for lookup
+    # FEATURE: Support for time-limited busy times (valid_from/valid_until)
     # Each entry now includes validity period info
     # Format: {weekday: [(start_time, end_time, valid_from, valid_until), ...]}
     busy_times_by_day: Dict[str, List[Tuple[time, time, Optional[date], Optional[date]]]] = {}
@@ -151,6 +166,11 @@ def subtract_time_interval(
 ) -> List[Tuple[time, time]]:
     """
     Subtract a busy time interval from a free time interval.
+    
+    ALGORITHM: Handle all possible overlap cases between intervals
+    - No overlap: return original interval
+    - Complete overlap: return empty list
+    - Partial overlap: return remaining segment(s)
 
     Args:
         free_start: Start time of free interval

@@ -8,7 +8,7 @@ This module contains no Streamlit dependencies and can be tested independently.
 from datetime import datetime, date, time, timedelta
 from typing import List, Tuple, Dict, Any, Optional
 
-from constants import WEEKDAY_INDEX_TO_EN, WEEKDAY_INDEX_TO_DE
+from constants import WEEKDAY_INDEX_TO_EN, WEEKDAY_INDEX_TO_DE, MAX_PLANNING_DAYS
 
 
 def calculate_free_slots(
@@ -51,8 +51,8 @@ def calculate_free_slots(
 
     # DEFENSIVE GUARD: Prevent extreme timeframes (performance & realism)
     days_difference = (study_end - study_start).days
-    if days_difference > 365:
-        return None, "Planungszeitraum darf maximal 1 Jahr (365 Tage) betragen."
+    if days_difference > MAX_PLANNING_DAYS:
+        return None, f"Planungszeitraum darf maximal 1 Jahr ({MAX_PLANNING_DAYS} Tage) betragen."
     
     if days_difference < 1:
         return None, "Planungszeitraum muss mindestens 1 Tag betragen."

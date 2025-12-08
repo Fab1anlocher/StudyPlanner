@@ -12,6 +12,7 @@ from openai import OpenAI, RateLimitError as OpenAIRateLimitError
 import google.generativeai as genai
 
 from config import settings
+from constants import MAX_RETRY_DELAY_SECONDS
 
 
 # ════════════════════════════════════════════════════════════════
@@ -115,7 +116,7 @@ class LLMProviderBase(ABC):
                 if attempt < retry_attempts - 1:
                     # DEFENSIVE GUARD: Exponential backoff with max cap to prevent excessive waits
                     delay = retry_delay * (2**attempt)
-                    delay = min(delay, 60)  # Cap at 60 seconds max
+                    delay = min(delay, MAX_RETRY_DELAY_SECONDS)
                     time.sleep(delay)
                     continue
                 else:

@@ -14,6 +14,7 @@ import json
 from constants import (
     OPENAI_MODELS,
     GEMINI_MODELS,
+    HOURS_PER_EFFORT_UNIT,
 )
 
 # Import prompt configuration
@@ -101,9 +102,9 @@ def generate_plan_via_ai():
         # DEFENSIVE GUARD: Check workload realism before calling LLM
         # Estimate total hours needed vs available
         total_hours_available = sum(slot.get("hours", 0) for slot in st.session_state.free_slots)
-        # Rough estimate: effort 1-5 maps to 5-25 hours per leistungsnachweis
+        # Rough estimate: effort level (1-5) maps to HOURS_PER_EFFORT_UNIT * effort
         total_hours_estimated = sum(
-            ln.get("effort", 3) * 5 for ln in st.session_state.leistungsnachweise
+            ln.get("effort", 3) * HOURS_PER_EFFORT_UNIT for ln in st.session_state.leistungsnachweise
         )
         
         if total_hours_available < 1:
@@ -268,11 +269,16 @@ def generate_plan_via_ai():
             session_end = session.get("end")
             
             # Find matching free slot
+            # Handle both date objects and ISO strings for robust comparison
             matching_slot = next(
                 (
                     slot
                     for slot in st.session_state.free_slots
-                    if str(slot["date"]) == session_date
+                    if (
+                        # Convert both to ISO strings for safe comparison
+                        (slot["date"].isoformat() if hasattr(slot["date"], "isoformat") else str(slot["date"]))
+                        == session_date
+                    )
                     and slot["start"] <= session_start
                     and slot["end"] >= session_end
                 ),

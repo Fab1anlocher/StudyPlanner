@@ -189,11 +189,20 @@ def _convert_busy_times(busy_times: List[Dict[str, Any]]) -> List[Dict[str, Any]
             # Convert German day name to English lowercase
             english_day = convert_weekday_de_to_en(day)
 
+            # DEFENSIVE GUARD: Handle time parsing errors gracefully
+            try:
+                start_time = datetime.strptime(busy["start"], TIME_FORMAT).time()
+                end_time = datetime.strptime(busy["end"], TIME_FORMAT).time()
+            except (ValueError, KeyError) as e:
+                # Skip invalid busy time but don't crash
+                # TODO: Could log warning here for debugging
+                continue
+
             converted.append(
                 {
                     "day": english_day,
-                    "start": datetime.strptime(busy["start"], TIME_FORMAT).time(),
-                    "end": datetime.strptime(busy["end"], TIME_FORMAT).time(),
+                    "start": start_time,
+                    "end": end_time,
                     "label": label,
                     "valid_from": valid_from,
                     "valid_until": valid_until,

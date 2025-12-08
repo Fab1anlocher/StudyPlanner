@@ -219,6 +219,13 @@ MAX_HOURS_PER_WEEK = 168
 MIN_SESSION_DURATION_MINUTES = 15
 MAX_SESSION_DURATION_MINUTES = 240
 
+# Planning Constraints
+MAX_PLANNING_DAYS = 365  # Maximum semester duration in days (1 year)
+HOURS_PER_EFFORT_UNIT = 5  # Estimated hours per effort level (1-5 scale)
+
+# LLM Service Constraints
+MAX_RETRY_DELAY_SECONDS = 60  # Maximum retry delay for rate limit errors
+
 
 # ════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS

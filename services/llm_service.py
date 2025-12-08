@@ -12,6 +12,7 @@ from openai import OpenAI, RateLimitError as OpenAIRateLimitError
 import google.generativeai as genai
 
 from config import settings
+from constants import MAX_RETRY_DELAY_SECONDS
 
 
 # ════════════════════════════════════════════════════════════════
@@ -113,8 +114,9 @@ class LLMProviderBase(ABC):
                 )
             except LLMRateLimitError as e:
                 if attempt < retry_attempts - 1:
-                    # Exponential backoff
+                    # DEFENSIVE GUARD: Exponential backoff with max cap to prevent excessive waits
                     delay = retry_delay * (2**attempt)
+                    delay = min(delay, MAX_RETRY_DELAY_SECONDS)
                     time.sleep(delay)
                     continue
                 else:
@@ -129,6 +131,11 @@ class LLMProviderBase(ABC):
         """
         Generiert Response und parsed als JSON
         Extrahiert automatisch JSON aus Markdown-Codeblocks
+        
+        FALLBACK STRATEGY: Try multiple parsing approaches
+        1. Direct JSON parsing
+        2. Extract from ```json``` blocks
+        3. Extract from generic ``` blocks
 
         Args:
             system_prompt: System-Prompt
@@ -149,7 +156,7 @@ class LLMProviderBase(ABC):
         except json.JSONDecodeError:
             pass
 
-        # Versuche JSON aus Markdown-Codeblock zu extrahieren
+        # FALLBACK: Versuche JSON aus Markdown-Codeblock zu extrahieren
         if "```json" in response_text:
             start_idx = response_text.find("```json") + 7
             end_idx = response_text.find("```", start_idx)
@@ -160,7 +167,7 @@ class LLMProviderBase(ABC):
                 except json.JSONDecodeError:
                     pass
 
-        # Versuche allgemeinen Codeblock
+        # FALLBACK: Versuche allgemeinen Codeblock
         if "```" in response_text:
             start_idx = response_text.find("```") + 3
             end_idx = response_text.find("```", start_idx)
